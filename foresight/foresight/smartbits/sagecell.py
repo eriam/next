@@ -31,7 +31,6 @@ class SageCellState(TrackedBaseModel):
     history: list = []
     streaming: bool = False
     session: str = ""
-    rank: int = 0
 
 
 class SageCell(SmartBit):

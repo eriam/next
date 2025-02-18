@@ -72,7 +72,6 @@ async function connectToRoom(room: string, user: User): Promise<YjsRoomConnectio
     provider.awareness.setLocalStateField('user', {
       name: user?.data.name || 'Anonymous',
       color: user?.data.color || '#000000',
-      uid: user._id,
     });
     // Establish the connection
     provider.connect();

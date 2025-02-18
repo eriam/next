@@ -235,9 +235,7 @@ export function LassoToolbar(props: LassoToolbarProps) {
     if (sameApps) {
       const firstApp = selectedApps[0];
       if (!firstApp) return false;
-      // return AI_ENABLED_APPS.includes(firstApp.data.type);
-      // for now, only Chat and PDFViewer are AI_Enabled in multi-select
-      return ["Stickie", "PDFViewer"].includes(firstApp.data.type);
+      return AI_ENABLED_APPS.includes(firstApp.data.type);
     } else {
       return false;
     }
@@ -426,6 +424,10 @@ export function LassoToolbar(props: LassoToolbarProps) {
             acc += el.data.state.text + '\n\n';
             return acc;
           }, '');
+        }
+        if (selectedApps[0].data.type === 'PDFViewer') {
+          console.log('apps', selectedApps);
+          console.log('lasso apps', lassoApps);
         }
         createApp(setupApp('Chat', 'Chat', x, y, roomId, boardId, { w: 800, h: 420 }, { context: context, sources: lassoApps }));
       } else {
@@ -780,20 +782,19 @@ for b in bits:
         </Box>
       )}
 
-      {deleteIsOpen &&
-        <ConfirmModal
-          isOpen={deleteIsOpen}
-          onClose={deleteOnClose}
-          onConfirm={closeSelectedApps}
-          title="Delete Selected Applications"
-          message={`Are you sure you want to delete the selected ${lassoApps.length > 1 ? `${lassoApps.length} applications?` : 'application?'
-            } `}
-          cancelText="Cancel"
-          confirmText="Delete"
-          confirmColor="red"
-          size="lg"
-        />
-      }
+      <ConfirmModal
+        isOpen={deleteIsOpen}
+        onClose={deleteOnClose}
+        onConfirm={closeSelectedApps}
+        title="Delete Selected Applications"
+        message={`Are you sure you want to delete the selected ${
+          lassoApps.length > 1 ? `${lassoApps.length} applications?` : 'application?'
+        } `}
+        cancelText="Cancel"
+        confirmText="Delete"
+        confirmColor="red"
+        size="lg"
+      ></ConfirmModal>
     </>
   );
 }
@@ -802,7 +803,7 @@ for b in bits:
  * Packing function
  */
 
-const GrowingPacker = function () { };
+const GrowingPacker = function () {};
 
 GrowingPacker.prototype = {
   fit: function (blocks: any[]) {

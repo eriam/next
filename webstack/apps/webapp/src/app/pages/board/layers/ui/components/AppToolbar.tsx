@@ -731,9 +731,8 @@ export function AppToolbar(props: AppToolbarProps) {
             </ModalFooter>
           </ModalContent>
         </Modal>
-
         {/* Delete tag confirmation */}
-        {isDeleteTagOpen && <ConfirmModal
+        <ConfirmModal
           isOpen={isDeleteTagOpen}
           onClose={onDeleteTagClose}
           onConfirm={handleDeleteTag}
@@ -745,7 +744,6 @@ export function AppToolbar(props: AppToolbarProps) {
           confirmColor="red"
           size="lg"
         />
-        }
       </HStack>
     );
   }
@@ -872,20 +870,18 @@ export function AppToolbar(props: AppToolbarProps) {
               </Button>
             </Tooltip>
 
-            {isDeleteOpen &&
-              <ConfirmModal
-                isOpen={isDeleteOpen}
-                onClose={onDeleteClose}
-                onConfirm={() => deleteApp(app._id)}
-                title="Delete Application"
-                message="Are you sure you want to delete this application?"
-                cancelText="Cancel"
-                confirmText="Delete"
-                confirmColor="red"
-                size="lg"
-                xOffSet={Math.max(0, (position.x - 150) / window.innerWidth)}
-              />
-            }
+            <ConfirmModal
+              isOpen={isDeleteOpen}
+              onClose={onDeleteClose}
+              onConfirm={() => deleteApp(app._id)}
+              title="Delete Application"
+              message="Are you sure you want to delete this application?"
+              cancelText="Cancel"
+              confirmText="Delete"
+              confirmColor="red"
+              size="lg"
+              xOffSet={Math.min(0.75, (position.x + 150) / window.innerWidth)}
+            />
           </>
         </ErrorBoundary>
       );

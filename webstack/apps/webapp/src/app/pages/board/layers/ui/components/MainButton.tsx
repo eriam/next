@@ -66,7 +66,9 @@ import {
   EditVisibilityModal,
   Alfred,
   truncateWithEllipsis,
+  IntelligenceModal,
 } from '@sage3/frontend';
+import { IntelligenceMenu } from './Menus';
 
 import { Board, OpenConfiguration } from '@sage3/shared/types';
 
@@ -108,6 +110,7 @@ export function MainButton(props: MainButtonProps) {
   const { isOpen: editIsOpen, onOpen: editOnOpen, onClose: editOnClose } = useDisclosure();
   const { isOpen: aboutIsOpen, onOpen: aboutOnOpen, onClose: aboutOnClose } = useDisclosure();
   const { isOpen: userSearchIsOpen, onOpen: userSearchOnOpen, onClose: userSearchOnClose } = useDisclosure();
+  const { isOpen: intelligenceIsOpen, onOpen: intelligenceOnOpen, onClose: intelligenceOnClose } = useDisclosure();
 
   // Alfred Modal
   const { isOpen: alfredIsOpen, onOpen: alfredOnOpen, onClose: alfredOnClose } = useDisclosure();
@@ -392,6 +395,10 @@ export function MainButton(props: MainButtonProps) {
               Account
             </MenuItem>
 
+            <MenuItem onClick={intelligenceOnOpen} icon={<IoSparklesSharp fontSize="24px" />} py="1px" m="0">
+              Intelligence
+            </MenuItem>
+
             <MenuItem onClick={toggleColorMode} icon={<MdInvertColors fontSize="24px" />} py="1px" m="0">
               {colorMode === 'light' ? 'Dark Mode' : 'Light Mode'}
             </MenuItem>
@@ -414,6 +421,9 @@ export function MainButton(props: MainButtonProps) {
 
       <EditUserModal isOpen={editIsOpen} onOpen={editOnOpen} onClose={editOnClose}></EditUserModal>
       <AboutModal isOpen={aboutIsOpen} onClose={aboutOnClose}></AboutModal>
+      <IntelligenceModal isOpen={intelligenceIsOpen} onOpen={intelligenceOnOpen} onClose={intelligenceOnClose}>
+        <IntelligenceMenu notificationCount={0} />
+      </IntelligenceModal>
 
       {
         // The test forces the recreation of the modal when the userSearchIsOpen state changes

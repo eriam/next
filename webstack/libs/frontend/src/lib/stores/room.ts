@@ -23,7 +23,6 @@ interface RoomState {
   error: string | null;
   fetched: boolean;
   members: RoomMembers[];
-  fetchRoom: (roomId: string) => Promise<Room | undefined>;
   joinRoomMembership: (roomId: string) => Promise<void>;
   leaveRoomMembership: (roomId: string) => Promise<void>;
   removeUserRoomMembership: (roomId: string, userId: string) => Promise<boolean>;
@@ -90,15 +89,6 @@ const RoomStore = create<RoomState>()((set, get) => {
     error: null,
     fetched: false,
     members: [],
-    fetchRoom: async (roomId: string) => {
-      const room = await APIHttp.GET<Room>(`/rooms/${roomId}`);
-      if (room.success && room.data) {
-        return room.data[0];
-      } else {
-        set({ error: room.message });
-        return undefined;
-      }
-    },
     joinRoomMembership: async (roomId: string) => {
       await APIHttp.POST<RoomMembers>(`/roommembers/join`, { roomId, members: [] });
     },

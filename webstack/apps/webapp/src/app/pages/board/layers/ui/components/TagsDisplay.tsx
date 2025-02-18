@@ -300,20 +300,18 @@ export function TagsDisplay() {
         ))}
 
       {/* Delete tag confirmation modal */}
-      {isOpen &&
-        <ConfirmModal
-          isOpen={isOpen}
-          onClose={onClose}
-          onConfirm={handleDeleteTag}
-          title="Delete this Tag"
-          message="Are you sure you want to delete this tag from all apps?"
-          cancelText="Cancel"
-          confirmText="Delete"
-          cancelColor="green"
-          confirmColor="red"
-          size="lg"
-        />
-      }
+      <ConfirmModal
+        isOpen={isOpen}
+        onClose={onClose}
+        onConfirm={handleDeleteTag}
+        title="Delete this Tag"
+        message="Are you sure you want to delete this tag from all apps?"
+        cancelText="Cancel"
+        confirmText="Delete"
+        cancelColor="green"
+        confirmColor="red"
+        size="lg"
+      />
     </VStack>
   );
 }

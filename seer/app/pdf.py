@@ -77,8 +77,7 @@ class PDFAgent:
         # Create the ChromaDB client
         chromaServer = "127.0.0.1"
         chromaPort = 8100
-        mode = os.getenv("ENVIRONMENT")
-        if mode == "production" or mode == "backend":
+        if os.getenv("ENVIRONMENT") == "production":
             chromaServer = "chromadb"
             chromaPort = 8000
 
