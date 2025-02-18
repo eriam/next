@@ -605,7 +605,7 @@ export const GroupedToolbarComponent = (props: { apps: AppGroup }) => {
 
         <Tooltip placement="top-start" hasArrow={true} label={'Execute All Cells in Order'} openDelay={400}>
           <Button onClick={setExecuteinOrder} isDisabled={!canExecuteCode} _hover={{ opacity: 0.7 }} size="xs" colorScheme="teal">
-            <MdOutlineKeyboardDoubleArrowRight />
+            <MdPlayArrow />
           </Button>
         </Tooltip>
 
