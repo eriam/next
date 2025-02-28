@@ -35,7 +35,7 @@ import {
 export type SBAuthConfig = {
   sessionMaxAge: number;
   sessionSecret: string;
-  strategies: ('google' | 'apple' | 'cilogon' | 'guest' | 'jwt' | 'spectator')[];
+  strategies: ('google' | 'apple' | 'cilogon' | 'guest' | 'jwt' | 'spectator' | 'local')[];
   production: boolean;
   googleConfig?: SBAuthGoogleConfig;
   appleConfig?: SBAuthAppleConfig;
@@ -233,7 +233,7 @@ export class SBAuth {
           async (username, password, done) => {
             try {
               const user = await this._database.getUserByUsername(username);
-              if (!user || user.password !== 'your-hardcoded-password') {
+              if (!user || user.password !== 'temp') {
                 return done(null, false, { message: 'Invalid username or password' });
               }
               return done(null, user);
