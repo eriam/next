@@ -58,19 +58,7 @@ const config: AbilityConfig = {
   abilites: [
     { role: ['admin'], resource: ['all'], action: ['all'] },
     { role: ['user'], resource: ['all'], action: ['all'] },
-    { role: ['guest'], resource: ['apps', 'presence', 'users'], action: ['create', 'read', 'update', 'sub', 'unsub'] },
-    { role: ['guest'], resource: ['apps'], action: ['resize', 'move', 'lasso'] },
-    {
-      role: ['guest'],
-      resource: ['assets', 'boards', 'message', 'plugins', 'rooms', 'insight', 'roommembers', 'annotations'],
-      action: ['read', 'sub', 'unsub'],
-    },
-    { role: ['guest'], resource: ['assets'], action: ['download'] },
-    {
-      role: ['spectator'],
-      resource: ['assets', 'apps', 'boards', 'message', 'plugins', 'presence', 'rooms', 'users', 'insight', 'annotations'],
-      action: ['read', 'sub', 'unsub'],
-    },
+    { role: ['guest'], resource: ['all'], action: ['all'] },
     { role: ['spectator'], resource: ['assets'], action: ['download'] },
   ],
 };

@@ -84,7 +84,7 @@ async function localLogin(username: string, password: string): Promise<void> {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username: username, password: password }),
   });
   if (res.status === 200) {
     window.location.reload();
@@ -177,9 +177,10 @@ export function AuthProvider(props: React.PropsWithChildren<Record<string, unkno
           ciLogin,
           guestLogin,
           spectatorLogin,
+          localLogin
         });
       } else {
-        setAuth({ auth: null, verify, loading: false, expire: 0, logout, googleLogin, appleLogin, ciLogin, guestLogin, spectatorLogin });
+        setAuth({ auth: null, verify, loading: false, expire: 0, logout, googleLogin, appleLogin, ciLogin, guestLogin, spectatorLogin, localLogin});
       }
     }
 

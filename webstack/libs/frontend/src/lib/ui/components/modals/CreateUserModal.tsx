@@ -72,7 +72,7 @@ export function CreateUserModal(props: CreateUserProps): JSX.Element {
         name: name.trim(),
         email: auth?.email ? auth.email : '',
         color: color,
-        userRole: auth?.provider === 'guest' ? 'guest' : 'user',
+        userRole: 'user',
         userType: type,
         profilePicture: '',
         savedBoards: [],

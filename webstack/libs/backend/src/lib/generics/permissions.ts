@@ -30,6 +30,7 @@ const providerToRoleMap = {
   jwt: 'user',
   spectator: 'spectator',
   guest: 'guest',
+  local: 'local',
 };
 
 // Conversion to RoleArg

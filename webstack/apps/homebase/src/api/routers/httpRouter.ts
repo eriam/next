@@ -71,9 +71,6 @@ export function expressAPIRouter(): express.Router {
   // route: /api/files/:id/:token
   router.use('/files', FilesRouter());
 
-  // Local authentication route
-  router.post('/auth/local', SAGEBase.Auth.localAuth);
-
   // Authenticate all API Routes
   router.use(SAGEBase.Auth.authenticate);
 
