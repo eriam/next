@@ -156,9 +156,9 @@ export class SBAuth {
         }
       }
       // Local Auth Setup
-      if (config.strategies.includes('local')) {
-        if (passportLocalSetup()) {
-          express.post('/auth/local', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/' }));
+      if (config.strategies.includes('local') && config.localConfig) {
+        if (passportLocalSetup(config.localConfig)) {
+          express.post(config.localConfig.routeEndpoint, passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login' }));
         }
       }
     }
