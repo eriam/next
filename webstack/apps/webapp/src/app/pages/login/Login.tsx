@@ -8,7 +8,7 @@
 
 import { useEffect, useCallback, useState } from 'react';
 
-import { Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack, useColorModeValue } from '@chakra-ui/react';
+import { Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack, useColorModeValue, Input } from '@chakra-ui/react';
 
 import { FcGoogle } from 'react-icons/fc';
 import { FaGhost, FaApple } from 'react-icons/fa';
@@ -19,13 +19,17 @@ import { isElectron, useAuth, useRouteNav, GetServerInfo } from '@sage3/frontend
 import cilogonLogo from '../../../assets/cilogon.png';
 
 export function LoginPage() {
-  const { auth, googleLogin, appleLogin, ciLogin, guestLogin, spectatorLogin } = useAuth();
+  const { auth, googleLogin, appleLogin, ciLogin, guestLogin, spectatorLogin, localLogin } = useAuth();
   const { toHome } = useRouteNav();
   // Server name and list
   const [serverName, setServerName] = useState<string>('');
   // state to disable login buttons during server switch: default is enabled
   const [shouldDisable, setShouldDisable] = useState(false);
   const [logins, setLogins] = useState<string[]>([]);
+  // Local authentication state
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
   // Logo URL
   // const logoUrl = useColorModeValue('/assets/SAGE3LightMode.png', '/assets/SAGE3DarkMode.png');
   const logoUrl = '/assets/sage3_banner.webp';
@@ -154,7 +158,28 @@ export function LoginPage() {
             </Button>
           </ButtonGroup>
 
-          {/* Guest Auth Service */}
+          {/* Local Auth Service */}
+          <VStack spacing={2} width="100%">
+            <Input
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <Input
+              placeholder="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Button
+              width="100%"
+              isDisabled={shouldDisable}
+              justifyContent="left"
+              onClick={() => localLogin(username, password)}
+            >
+              Login
+            </Button>
+          </VStack>
           <ButtonGroup isAttached size="lg" width="100%">
             <IconButton
               width="80px"
