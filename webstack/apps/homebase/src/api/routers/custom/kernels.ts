@@ -60,11 +60,6 @@ export function KernelsRouter() {
     },
   });
 
-  // Handle proxy errors
-  router.on('error', (err, req, res) => {
-    console.error('Proxy error:', err);
-    res.status(502).json({ error: 'Bad Gateway', message: 'The proxy server is unreachable.' });
-  });
 
   return router;
 }
