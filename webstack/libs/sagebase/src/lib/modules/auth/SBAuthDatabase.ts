@@ -202,8 +202,16 @@ class SBAuthDatabase {
     console.log('SAGEBase SBAuthDatabase ERROR: ', error);
   }
 
-  async getUserByUsername(username: string) {
-    
+  async getUserByUsername(username: string): Promise<SBAuthSchema> {
+    // Return a default user with the provided username
+    return {
+      provider: 'local',
+      providerId: username,
+      id: 'default-id',
+      displayName: username,
+      email: `${username}@example.com`,
+      picture: 'default-picture-url',
+    };
   }
 }
 
