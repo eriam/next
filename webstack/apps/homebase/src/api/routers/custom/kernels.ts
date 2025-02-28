@@ -58,6 +58,10 @@ export function KernelsRouter() {
         });
       }
     },
+    onError: (err, req, res) => {
+      console.error('Proxy error:', err);
+      res.status(502).json({ error: 'Bad Gateway', message: 'The proxy server is unreachable.' });
+    },
   });
 
 
