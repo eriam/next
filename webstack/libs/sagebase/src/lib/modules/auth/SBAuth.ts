@@ -28,11 +28,12 @@ import {
   SBAuthGuestConfig,
   passportCILogonSetup,
   SBAuthCILogonConfig,
-  passportSpectatorSetup,
-  SBAuthSpectatorConfig,
   passportLocalSetup,
   SBAuthLocalConfig,
+  passportSpectatorSetup,
+  SBAuthSpectatorConfig
 } from './adapters/';
+
 
 export type SBAuthConfig = {
   sessionMaxAge: number;
@@ -43,6 +44,7 @@ export type SBAuthConfig = {
   jwtConfig?: SBAuthJWTConfig;
   guestConfig?: SBAuthGuestConfig;
   cilogonConfig?: SBAuthCILogonConfig;
+  localConfig?: SBAuthLocalConfig;
   spectatorConfig?: SBAuthSpectatorConfig;
 };
 
@@ -155,11 +157,8 @@ export class SBAuth {
       }
       // Local Auth Setup
       if (config.strategies.includes('local')) {
-        const localConfig: SBAuthLocalConfig = {
-          routeEndpoint: '/auth/local',
-        };
-        if (passportLocalSetup(localConfig)) {
-          express.post(localConfig.routeEndpoint, passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login' }));
+        if (passportLocalSetup()) {
+          express.post('/auth/local', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/' }));
         }
       }
     }
