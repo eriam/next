@@ -75,7 +75,23 @@ async function spectatorLogin(): Promise<void> {
 }
 
 /**
- * Logout the user out of the current session and user
+ * Endpoint to login with local authentication
+ */
+async function localLogin(username: string, password: string): Promise<void> {
+  const res = await fetch('/auth/local', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  });
+  if (res.status === 200) {
+    window.location.reload();
+  }
+}
+
+/**
  */
 async function logout(): Promise<void> {
   const res = await fetch('/auth/logout', {
@@ -120,6 +136,7 @@ type AuthenticatedType = {
   ciLogin: () => void;
   guestLogin: () => Promise<void>;
   spectatorLogin: () => Promise<void>;
+  localLogin: (username: string, password: string) => Promise<void>;
 };
 
 const AuthContext = createContext({
@@ -142,6 +159,7 @@ export function AuthProvider(props: React.PropsWithChildren<Record<string, unkno
     ciLogin,
     guestLogin,
     spectatorLogin,
+    localLogin,
   });
 
   useEffect(() => {
