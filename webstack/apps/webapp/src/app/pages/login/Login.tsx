@@ -336,7 +336,7 @@ export function LoginPage() {
       <Box width="300px">
         <VStack spacing={4}>
           {/* Google Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
+          {/* <ButtonGroup isAttached size="lg" width="100%">
             <IconButton
               width="80px"
               aria-label="Login with Google"
@@ -348,10 +348,10 @@ export function LoginPage() {
             <Button width="100%" isDisabled={shouldDisable || !logins.includes('google')} justifyContent="left" onClick={googleLogin}>
               Login with Google
             </Button>
-          </ButtonGroup>
+          </ButtonGroup> */}
 
           {/* Apple Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
+          {/* <ButtonGroup isAttached size="lg" width="100%">
             <IconButton
               width="80px"
               aria-label="Login with Apple"
@@ -363,10 +363,10 @@ export function LoginPage() {
             <Button width="100%" isDisabled={shouldDisable || !logins.includes('apple')} justifyContent="left" onClick={appleLogin}>
               Login with Apple
             </Button>
-          </ButtonGroup>
+          </ButtonGroup> */}
 
           {/* CILogon Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
+          {/* <ButtonGroup isAttached size="lg" width="100%">
             <IconButton
               width="80px"
               aria-label="Login with Google"
@@ -378,7 +378,7 @@ export function LoginPage() {
             <Button width="100%" isDisabled={shouldDisable || !logins.includes('cilogon')} justifyContent="left" onClick={ciLogin}>
               Login with CILogon
             </Button>
-          </ButtonGroup>
+          </ButtonGroup> */}
 
           {/* Local Auth Service */}
           <VStack spacing={2} width="100%">
