@@ -417,14 +417,8 @@ export function UILayer(props: UILayerProps) {
           <ToolbarButton bgColor={usersColor as SAGEColors} icon={<MdPeople />} tooltip={'Users'} title={'Users'}>
             <UsersMenu boardId={props.boardId} />
           </ToolbarButton>
-          <ToolbarButton bgColor={usersColor as SAGEColors} icon={<MdScreenShare />} tooltip={'Screenshares'} title={'Screenshares'}>
-            <ScreenshareMenu boardId={props.boardId} roomId={props.roomId} />
-          </ToolbarButton>
           <ToolbarButton bgColor={usersColor as SAGEColors} icon={<MdApps />} tooltip={'Applications'} title={'Applications'}>
             {room && board && <ApplicationsMenu roomId={room?._id} boardId={board?._id} />}
-          </ToolbarButton>
-          <ToolbarButton bgColor={usersColor as SAGEColors} icon={<HiPuzzle />} tooltip={'Plugins'} title={'Plugins'}>
-            {room && board && <PluginsMenu roomId={room?._id} boardId={board?._id} />}
           </ToolbarButton>
           <ToolbarButton bgColor={usersColor as SAGEColors} icon={<MdFolder />} tooltip={'Assets'} title={'Assets'} offset={[8, 8]}>
             {room && board && <AssetsMenu roomId={room?._id} boardId={board?._id} downloadRoomAssets={downloadRoomAssets} />}

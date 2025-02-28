@@ -8,9 +8,7 @@
 
 import * as passport from 'passport';
 
-export type SBAuthLocalConfig = {
-  routeEndpoint: string;
-};
+
 import { Issuer, custom } from 'openid-client';
 import { Strategy, VerifyCallback } from 'passport-openidconnect';
 
