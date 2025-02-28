@@ -16,6 +16,7 @@ import * as passport from 'passport';
 import { SBAuthDatabase, SBAuthDB, SBAuthSchema } from './SBAuthDatabase';
 export type { SBAuthSchema } from './SBAuthDatabase';
 export type { JWTPayload } from './adapters';
+import { Strategy as LocalStrategy } from 'passport-local';
 import {
   passportGoogleSetup,
   SBAuthGoogleConfig,
@@ -149,6 +150,24 @@ export class SBAuth {
             passport.authenticate('openidconnect', { successRedirect: '/', failureRedirect: '/' })
           );
         }
+      }
+      // Local Auth Setup
+      if (config.strategies.includes('local')) {
+        passport.use(new LocalStrategy(
+          async (username, password, done) => {
+            try {
+              const user = await this._database.getUserByUsername(username);
+              if (!user || user.password !== 'your-hardcoded-password') {
+                return done(null, false, { message: 'Invalid username or password' });
+              }
+              return done(null, user);
+            } catch (error) {
+              return done(error);
+            }
+          }
+        ));
+
+        express.post('/auth/local', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login' }));
       }
     }
 
