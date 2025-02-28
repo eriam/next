@@ -8,7 +8,7 @@
 
 import { useEffect, useCallback, useState } from 'react';
 
-import { Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack, useColorModeValue, useToast } from '@chakra-ui/react';
+import { Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack, useColorModeValue, useToast, Input } from '@chakra-ui/react';
 
 import { FcGoogle } from 'react-icons/fc';
 import { FaGhost, FaApple } from 'react-icons/fa';
@@ -22,14 +22,15 @@ import cilogonLogo from '../../../assets/cilogon.png';
  * Login page with authentication options and board context handling
  */
 export function LoginPage() {
-  const { auth, googleLogin, appleLogin, ciLogin, guestLogin, spectatorLogin, loading: authLoading } = useAuth();
+  const { auth, googleLogin, appleLogin, ciLogin, guestLogin, spectatorLogin, localLogin, loading: authLoading } = useAuth();
   const { toCreateUser } = useRouteNav();
   const toast = useToast();
-  
   const [serverName, setServerName] = useState<string>('');
   const [shouldDisable, setShouldDisable] = useState(false);
   const [logins, setLogins] = useState<string[]>([]);
-  
+  // Local authentication state
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const logoUrl = '/assets/sage3_banner.webp';
   const thisIsElectron = isElectron();
 
@@ -379,7 +380,28 @@ export function LoginPage() {
             </Button>
           </ButtonGroup>
 
-          {/* Guest Auth Service */}
+          {/* Local Auth Service */}
+          <VStack spacing={2} width="100%">
+            <Input
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <Input
+              placeholder="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Button
+              width="100%"
+              isDisabled={shouldDisable}
+              justifyContent="left"
+              onClick={() => localLogin(username, password)}
+            >
+              Login
+            </Button>
+          </VStack>
           <ButtonGroup isAttached size="lg" width="100%">
             <IconButton
               width="80px"
