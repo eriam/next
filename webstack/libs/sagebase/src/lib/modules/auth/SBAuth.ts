@@ -30,6 +30,8 @@ import {
   SBAuthCILogonConfig,
   passportSpectatorSetup,
   SBAuthSpectatorConfig,
+  passportLocalSetup,
+  SBAuthLocalConfig,
 } from './adapters/';
 
 export type SBAuthConfig = {
@@ -153,21 +155,12 @@ export class SBAuth {
       }
       // Local Auth Setup
       if (config.strategies.includes('local')) {
-        passport.use(new LocalStrategy(
-          async (username, password, done) => {
-            try {
-              const user = await this._database.getUserByUsername(username);
-              if (!user || user.password !== 'temp') {
-                return done(null, false, { message: 'Invalid username or password' });
-              }
-              return done(null, user);
-            } catch (error) {
-              return done(error);
-            }
-          }
-        ));
-
-        express.post('/auth/local', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login' }));
+        const localConfig: SBAuthLocalConfig = {
+          routeEndpoint: '/auth/local',
+        };
+        if (passportLocalSetup(localConfig)) {
+          express.post(localConfig.routeEndpoint, passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login' }));
+        }
       }
     }
 
