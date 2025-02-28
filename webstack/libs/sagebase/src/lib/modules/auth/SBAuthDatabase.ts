@@ -201,6 +201,10 @@ class SBAuthDatabase {
   private ERRORLOG(error: unknown) {
     console.log('SAGEBase SBAuthDatabase ERROR: ', error);
   }
+
+  async getUserByUsername(username: string) {
+    
+  }
 }
 
 export type { SBAuthDatabase };
