@@ -491,9 +491,37 @@ export function UILayer(props: UILayerProps) {
         </Tooltip>
       </Box>
 
-      {/* Party Button */}
-      <Box position="absolute" right="2" bottom="2" zIndex="1000" display={showUI ? 'initial' : 'none'}>
-        <PartyButton iconSize="sm" />
+      {/* Main Button Bottom Left */}
+      <Box position="absolute" left="2" bottom="2" zIndex={101} display={showUI ? 'flex' : 'none'} borderRadius="md">
+        <Box display="flex" gap="1">
+          <Tooltip label={'Back to Home'} placement="top-start" shouldWrapChildren={true} openDelay={200} hasArrow={true}>
+            <Button onClick={handleHomeClick} aria-label={''} size="sm" p="0" colorScheme={usersColor} fontSize="lg">
+              <MdArrowBack />
+            </Button>
+          </Tooltip>
+          <Divider orientation="vertical" mx="1" />
+          <MainButton
+            buttonStyle="solid"
+            backToRoom={() => toHome(props.roomId)}
+            boardInfo={{
+              boardId: props.boardId,
+              roomId: props.roomId,
+              boardName: board ? board?.data.name : '',
+              roomName: room ? room?.data.name : '',
+            }}
+            config={config}
+          />
+          <Divider orientation="vertical" mx="1" />
+          <Interactionbar isContextMenuOpen={isContextMenuOpen} />
+          <Divider orientation="vertical" mx="1" />
+          <ToolbarButton bgColor={usersColor as SAGEColors} icon={<MdPeople />} tooltip={'Users'} title={'Users'}>
+            <UsersMenu boardId={props.boardId} />
+          </ToolbarButton>
+          <ToolbarButton bgColor={usersColor as SAGEColors} icon={<MdApps />} tooltip={'Applications'} title={'Applications'}>
+            {room && board && <ApplicationsMenu roomId={room?._id} boardId={board?._id} />}
+          </ToolbarButton>
+
+        </Box>
       </Box>
 
       {/* Hub-Room-Board Name Top Left */}
