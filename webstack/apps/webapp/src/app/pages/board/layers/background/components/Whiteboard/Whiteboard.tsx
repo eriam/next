@@ -264,7 +264,10 @@ export function Whiteboard(props: WhiteboardProps) {
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       if (!rCurrentLine.current) return;
-      if (!e.currentTarget.hasPointerCapture(e.pointerId) || e.pointerType === 'touch') return;
+      // For mouse / pen we require an active pointer capture to avoid stray moves.
+      // For touch, some browsers don't maintain capture the same way, and we also
+      // synthesize touch moves via onTouchMove below, so we only guard on capture.
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
       const [x, y] = getPoint(e.clientX, e.clientY);
       setCursorPosition(primaryActionMode !== 'eraser' ? { x, y } : null);
 
@@ -543,7 +546,8 @@ export function Whiteboard(props: WhiteboardProps) {
           left: 0,
           top: 0,
           zIndex: 1000,
-          cursor: primaryActionMode === 'pen' ? 'crosshair' : 'eraser',
+        // Use a consistent crosshair cursor for all annotation tools
+        cursor: 'crosshair',
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

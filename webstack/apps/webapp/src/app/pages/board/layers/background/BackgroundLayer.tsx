@@ -57,6 +57,12 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
   const movementTimeoutRef = useRef<number | null>(null);
   const movementZoomSafetyTimeoutRef = useRef<number | null>(null);
 
+  // Touch pinch-zoom tuning: small distance changes between fingers should not
+  // cause large zoom jumps. Use a deadzone and clamp per-frame zoom delta.
+  const TOUCH_PINCH_DEADZONE = 10; // pixels of distance change before zoom engages
+  const TOUCH_PINCH_MAX_STEP = 40; // max effective distance delta per frame
+  const touchGestureModeRef = useRef<'none' | 'pan' | 'pinch'>('none');
+
   /////////////////////////////////
   // UI Store Board Syncronizers //
   /////////////////////////////////
@@ -403,15 +409,29 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
               { x: event.touches[0].clientX, y: event.touches[0].clientY },
               { x: event.touches[1].clientX, y: event.touches[1].clientY }
             );
-            const zoomDelta = prevDistance - distance;
+            const zoomDeltaRaw = prevDistance - distance;
             const avgX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
             const avgY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
 
             if (prevDistance > 0) {
-              if (zoomDelta < 0) {
-                localZoomInDelta(zoomDelta, { x: avgX, y: avgY });
-              } else if (zoomDelta > 0) {
-                localZoomOutDelta(zoomDelta, { x: avgX, y: avgY });
+              // Decide and lock gesture mode for this 2-finger gesture
+              if (touchGestureModeRef.current === 'none') {
+                touchGestureModeRef.current =
+                  Math.abs(zoomDeltaRaw) > TOUCH_PINCH_DEADZONE ? 'pinch' : 'pan';
+              }
+
+              // Only apply zoom when we are in pinch mode and distance change
+              // is beyond the deadzone. Pan is always applied below.
+              if (touchGestureModeRef.current === 'pinch' && Math.abs(zoomDeltaRaw) > TOUCH_PINCH_DEADZONE) {
+                // Clamp the effective zoom delta to avoid huge jumps per frame
+                const zoomDelta =
+                  Math.sign(zoomDeltaRaw) * Math.min(Math.abs(zoomDeltaRaw), TOUCH_PINCH_MAX_STEP);
+
+                if (zoomDelta < 0) {
+                  localZoomInDelta(zoomDelta, { x: avgX, y: avgY });
+                } else if (zoomDelta > 0) {
+                  localZoomOutDelta(zoomDelta, { x: avgX, y: avgY });
+                }
               }
             }
 
@@ -433,12 +453,21 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
       });
     };
 
+    // Reset gesture mode when fingers lift
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (event.touches.length < 2) {
+        touchGestureModeRef.current = 'none';
+      }
+    };
+
     window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { passive: false });
     window.addEventListener('mousemove', handleMouseMove, { passive: false });
     window.addEventListener('wheel', handleMove, { passive: false });
 
     return () => {
       window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('wheel', handleMove);
     };
