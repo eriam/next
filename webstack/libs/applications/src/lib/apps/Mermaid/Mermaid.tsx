@@ -6,12 +6,15 @@
  * the file LICENSE, distributed as part of this software.
  */
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button, ButtonGroup, Tooltip, Box, useColorModeValue, border } from '@chakra-ui/react';
 import mermaid, { type MermaidConfig } from "mermaid";
 
-import { useAppStore } from '@sage3/frontend';
+// Utility functions from SAGE3
+import { useAppStore, isUUIDv4, useAssetStore, apiUrls } from '@sage3/frontend';
+import { Asset } from '@sage3/shared/types';
+
 import { MdCode } from 'react-icons/md';
 
 import { state as AppState } from "./index";
@@ -37,34 +40,66 @@ function CustomErrorComponent({ error, mermaidCode }: { error: string; mermaidCo
 
 /* App component for Mermaid */
 function AppComponent(props: App): JSX.Element {
+  const s = props.data.state as AppState;
+  const assets = useAssetStore((state) => state.assets);
+  const update = useAppStore((state) => state.update);
+
   // Styling
   const theme = useColorModeValue('forest', 'dark');
-  const bgColor = useColorModeValue('gray.100', 'gray.800');
-  const borderColor = useColorModeValue('gray.800', 'gray.100');
+  const bgColor = useColorModeValue('gray.100', 'gray.700');
+  const borderColor = useColorModeValue('gray.700', 'gray.100');
   // Unique ID for the mermaid container
   const id = `mermaid-${props._id}`;
   // Ref for the mermaid container
   const mermaidRef = useRef<HTMLDivElement>(null);
   // Error state
   const [error, setError] = useState<string | null>(null);
+  // Asset data structure
+  const [file, setFile] = useState<Asset>();
+  // Get the data
+  const [data, setData] = useState<string>("");
 
-  const d1 = `sequenceDiagram
-    Alice ->> Bob: Hello Bob, how are you?
-    Bob-->>John: How about you John?
-    Bob-x Alice: I am good thanks!
-    Bob-x John: I am good thanks!
+  // Convert the ID to an asset
+  useEffect(() => {
+    const isUUID = isUUIDv4(s.assetid);
+    if (isUUID) {
+      const myasset = assets.find((a) => a._id === s.assetid);
+      if (myasset) {
+        setFile(myasset);
+        // Update the app title
+        update(props._id, { title: myasset?.data.originalfilename });
+      }
+    }
+  }, [s.assetid, assets]);
 
-    Note right of John: Bob thinks a long long time, so long that the text ...
+  // Get the data from the asset
+  useEffect(() => {
+    if (file) {
+      const localurl = apiUrls.assets.getAssetById(file.data.file);
+      if (localurl) {
+        fetch(localurl, {
+          headers: {
+            'Content-Type': 'text/csv',
+            Accept: 'text/csv',
+          },
+        })
+          .then(function (response) {
+            return response.text();
+          })
+          .then(async function (text) {
+            setData(text);
+          });
+      }
+    }
+  }, [file]);
 
-    Bob-->Alice: Checking with John...
-    Alice->John: Yes... John, how are you?
-  `;
 
   useEffect(() => {
-    if (!mermaidRef.current) return;
+    if (!mermaidRef.current || !data) return;
     async function renderMermaid(diag: string) {
       const mermaidConfig: MermaidConfig = {
         theme: theme,
+        fontSize: 20,
       };
       mermaid.initialize({
         startOnLoad: false,
@@ -91,14 +126,14 @@ function AppComponent(props: App): JSX.Element {
         if (mermaidRef.current) mermaidRef.current.innerHTML = '';
       }
     }
-    renderMermaid(d1);
-  }, [id, theme]);
+    renderMermaid(data);
+  }, [id, theme, data]);
 
   return (
     <AppWindow app={props} hideBackgroundIcon={MdCode}>
       <Box p={1} border={'none'} overflow="hidden" height="100%" borderRadius={'md'} background={borderColor}>
         {error ? (
-          <CustomErrorComponent error={error} mermaidCode={d1} />
+          <CustomErrorComponent error={error} mermaidCode={data} />
         ) : (
           <Box ref={mermaidRef} borderRadius={'md'}
             width="100%"
