@@ -92,6 +92,7 @@ export function Whiteboard(props: WhiteboardProps) {
   const [yLines, setYlines] = useState<Y.Array<Y.Map<any>> | null>(null);
   const [lines, setLines] = useState<Y.Map<any>[]>([]);
   const rCurrentLine = useRef<Y.Map<any>>();
+  const activeTouchCount = useRef(0);
 
   // Preview cursor state
   const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
@@ -214,6 +215,15 @@ export function Whiteboard(props: WhiteboardProps) {
    */
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
+      // Track active touch pointers to distinguish between single-finger draw
+      // and multi-touch gestures (handled by BackgroundLayer for pan/zoom).
+      if (e.pointerType === 'touch') {
+        activeTouchCount.current += 1;
+      }
+
+      // Ignore drawing when more than one touch is active; multi-touch is used
+      // for pan/zoom and should not create or modify strokes.
+      if (e.pointerType === 'touch' && activeTouchCount.current > 1) return;
       // Determine type based on current tool
       const type = primaryActionMode === 'rectangle' ? 'rectangle' : primaryActionMode === 'pen' ? 'line' : primaryActionMode === 'circle' ? 'circle' : primaryActionMode === 'arrow' ? 'arrow' : primaryActionMode === 'doubleArrow' ? 'doubleArrow' : 'eraser';
       if (type === 'eraser') return;
@@ -264,10 +274,12 @@ export function Whiteboard(props: WhiteboardProps) {
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       if (!rCurrentLine.current) return;
-      // For mouse / pen we require an active pointer capture to avoid stray moves.
-      // For touch, some browsers don't maintain capture the same way, and we also
-      // synthesize touch moves via onTouchMove below, so we only guard on capture.
+      // For mouse / pen / touch we require an active pointer capture to avoid stray moves.
       if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+
+      // If multiple touch points are active, delegate to background pan/zoom
+      // logic and do not update the current stroke.
+      if (e.pointerType === 'touch' && activeTouchCount.current > 1) return;
       const [x, y] = getPoint(e.clientX, e.clientY);
       setCursorPosition(primaryActionMode !== 'eraser' ? { x, y } : null);
 
@@ -305,6 +317,9 @@ export function Whiteboard(props: WhiteboardProps) {
    */
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
+      if (e.pointerType === 'touch' && activeTouchCount.current > 0) {
+        activeTouchCount.current -= 1;
+      }
       e.currentTarget.releasePointerCapture(e.pointerId);
       const current = rCurrentLine.current;
       if (!current) return;
