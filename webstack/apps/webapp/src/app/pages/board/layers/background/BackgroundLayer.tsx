@@ -58,9 +58,10 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
   const movementZoomSafetyTimeoutRef = useRef<number | null>(null);
 
   // Touch pinch-zoom tuning: small distance changes between fingers should not
-  // cause large zoom jumps. Use a deadzone and clamp per-frame zoom delta.
-  const TOUCH_PINCH_DEADZONE = 10; // pixels of distance change before zoom engages
-  const TOUCH_PINCH_MAX_STEP = 40; // max effective distance delta per frame
+  // cause large zoom jumps. Use a deadzone and clamp the per-frame scale ratio.
+  const TOUCH_PINCH_DEADZONE = 10;    // pixels of distance change before zoom engages
+  const TOUCH_PINCH_MIN_RATIO = 0.95; // max zoom-out per frame (5%)
+  const TOUCH_PINCH_MAX_RATIO = 1.05; // max zoom-in per frame (5%)
 
   /////////////////////////////////
   // UI Store Board Syncronizers //
@@ -412,21 +413,23 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
             const avgX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
             const avgY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
 
-            if (prevDistance > 0) {
-              // Apply a deadzone so tiny finger-distance jitter does not zoom.
-              // Do not hard-lock the gesture into pan or pinch: allow both,
-              // but gate zoom behind the deadzone and clamp its sensitivity.
-              if (Math.abs(zoomDeltaRaw) > TOUCH_PINCH_DEADZONE) {
-                // Clamp the effective zoom delta to avoid huge jumps per frame
-                const zoomDelta =
-                  Math.sign(zoomDeltaRaw) * Math.min(Math.abs(zoomDeltaRaw), TOUCH_PINCH_MAX_STEP);
+            if (prevDistance > 0 && Math.abs(zoomDeltaRaw) > TOUCH_PINCH_DEADZONE) {
+              // Use ratio-based zoom for smooth, continuous pinch behaviour.
+              // This avoids the discrete "stepping" of the wheel-based zoom
+              // helpers which quantize through WheelStepZoom.
+              const rawRatio = distance / prevDistance;
+              // Clamp the per-frame ratio so zoom can't jump too fast
+              const ratio = Math.max(TOUCH_PINCH_MIN_RATIO, Math.min(rawRatio, TOUCH_PINCH_MAX_RATIO));
 
-                if (zoomDelta < 0) {
-                  localZoomInDelta(zoomDelta, { x: avgX, y: avgY });
-                } else if (zoomDelta > 0) {
-                  localZoomOutDelta(zoomDelta, { x: avgX, y: avgY });
-                }
-              }
+              setLocalBoardPosition((prevBoard) => {
+                const newScale = Math.max(MinZoom, Math.min(prevBoard.scale * ratio, MaxZoom));
+                return zoomOnLocationNewPosition(
+                  { x: prevBoard.x, y: prevBoard.y },
+                  { x: avgX, y: avgY },
+                  prevBoard.scale,
+                  newScale,
+                );
+              });
             }
 
             setLocalBoardPosition((prevBoard) => {

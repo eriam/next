@@ -113,6 +113,26 @@ export function Whiteboard(props: WhiteboardProps) {
   }
 
   /**
+   * Cancel and remove the in-progress stroke (if any).  Called when a second
+   * touch finger arrives so the initial single-finger touch doesn't leave a
+   * tiny dot behind during a pan/zoom gesture.
+   */
+  function cancelInProgressStroke() {
+    const current = rCurrentLine.current;
+    if (!current || !yLines) {
+      rCurrentLine.current = undefined;
+      return;
+    }
+    // Remove the incomplete shape from the Yjs array
+    const index = yLines.toArray().indexOf(current);
+    if (index >= 0) {
+      yLines.delete(index, 1);
+    }
+    rCurrentLine.current = undefined;
+    setCursorPosition(null);
+  }
+
+  /**
    * Convert pointer coordinates from client space to board space, accounting
    * for board position and current scale.  Returns an array [x, y].
    */
@@ -221,9 +241,13 @@ export function Whiteboard(props: WhiteboardProps) {
         activeTouchCount.current += 1;
       }
 
-      // Ignore drawing when more than one touch is active; multi-touch is used
-      // for pan/zoom and should not create or modify strokes.
-      if (e.pointerType === 'touch' && activeTouchCount.current > 1) return;
+      // When a second finger arrives, cancel any in-progress stroke from the
+      // first finger so it doesn't leave a tiny dot behind.  Multi-touch is
+      // used for pan/zoom and should not create or modify strokes.
+      if (e.pointerType === 'touch' && activeTouchCount.current > 1) {
+        cancelInProgressStroke();
+        return;
+      }
       // Determine type based on current tool
       const type = primaryActionMode === 'rectangle' ? 'rectangle' : primaryActionMode === 'pen' ? 'line' : primaryActionMode === 'circle' ? 'circle' : primaryActionMode === 'arrow' ? 'arrow' : primaryActionMode === 'doubleArrow' ? 'doubleArrow' : 'eraser';
       if (type === 'eraser') return;
@@ -277,9 +301,12 @@ export function Whiteboard(props: WhiteboardProps) {
       // For mouse / pen / touch we require an active pointer capture to avoid stray moves.
       if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
 
-      // If multiple touch points are active, delegate to background pan/zoom
-      // logic and do not update the current stroke.
-      if (e.pointerType === 'touch' && activeTouchCount.current > 1) return;
+      // If multiple touch points are active, cancel the in-progress stroke
+      // and delegate to background pan/zoom logic.
+      if (e.pointerType === 'touch' && activeTouchCount.current > 1) {
+        cancelInProgressStroke();
+        return;
+      }
       const [x, y] = getPoint(e.clientX, e.clientY);
       setCursorPosition(primaryActionMode !== 'eraser' ? { x, y } : null);
 
