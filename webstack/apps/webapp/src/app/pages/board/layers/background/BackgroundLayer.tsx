@@ -9,10 +9,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Box } from '@chakra-ui/react';
-import { Rnd } from 'react-rnd';
 
 import { useUIStore, useAbility, WheelStepZoom, MinZoom, MaxZoom, useUserSettings } from '@sage3/frontend';
-import { Background, Apps, Whiteboard, Lasso, PresenceComponent, RndSafety, Links, CursorArrow, LinkerMode } from './components';
+import { Background, Apps, Whiteboard, Lasso, PresenceComponent, Links, CursorArrow, LinkerMode } from './components';
 
 type BackgroundLayerProps = {
   boardId: string;
@@ -463,26 +462,20 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
 
   return (
     <Box transform={`scale(${localBoardPosition.scale})`} transformOrigin={'top left'}>
-      {/* Board. Uses lib react-rnd for drag events. Draggable Background below is the actual target for drag events.*/}
-      <Rnd
-        // Remember board position and size
-        default={{
-          x: boardPosition.x,
-          y: boardPosition.y,
+      {/* Board container — positioned absolutely, all pan/zoom via window event listeners */}
+      <div
+        style={{
+          position: 'absolute',
+          left: localBoardPosition.x,
+          top: localBoardPosition.y,
           width: boardWidth,
           height: boardHeight,
         }}
-        scale={localBoardPosition.scale}
-        position={{ x: localBoardPosition.x, y: localBoardPosition.y }}
-        enableResizing={false}
-        dragHandleClassName={'board-handle'}
-        disableDragging={true}
       >
         {primaryActionMode === 'linker' && <LinkerMode />}
 
         {/* The board's apps */}
         <Apps />
-
 
         {/* Whiteboard */}
         <WhiteboardMemo roomId={props.roomId} boardId={props.boardId} />
@@ -493,20 +486,15 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
         <Links />
         <CursorArrow />
 
-
         {/* Presence of the users */}
         <PresenceComponent boardId={props.boardId} />
 
         {/* Draggable Background */}
         <Background boardId={props.boardId} roomId={props.roomId} />
-
-        {/* Rnd Safety to Mitigate app click dissapear issue when using new movement scheme */}
-        <RndMemo />
-      </Rnd>
+      </div>
     </Box>
   );
 }
-const RndMemo = React.memo(RndSafety);
 const LassoMemo = React.memo(Lasso);
 const WhiteboardMemo = React.memo(Whiteboard);
 
