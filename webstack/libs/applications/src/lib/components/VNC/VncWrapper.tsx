@@ -1,11 +1,3 @@
-/**
- * Copyright (c) SAGE3 Development Team 2023. All Rights Reserved
- * University of Hawaii, University of Illinois Chicago, Virginia Tech
- *
- * Distributed under the terms of the SAGE3 License.  The full license is in
- * the file LICENSE, distributed as part of this software.
- */
-
 import {
   ButtonGroup,
   Button,
@@ -47,13 +39,17 @@ import { VncScreen, RFB } from '../../components/VNC/react-vnc';
 import { ContainerAPI as VmsAPI, VEO_URL_TMP } from '../../components/VNC/API';
 import { AudioVncService } from '../../components/VNC/AudioVncService';
 
-/* App component for CoBrowser */
+export interface NoVncProps {
+  container: string;
+  envs: {};
+  s: any;
+  props: App;
+}
 
-function AppComponent(props: App): JSX.Element {
+export const VNCAudioWrapper = ({ container, envs, s, props }: NoVncProps): JSX.Element => {
   const { colorMode } = useColorMode();
   const theme = colorMode === 'light' ? 1 : 0;
 
-  const s = props.data.state as AppState;
   const [wsUrl, setWsUrl] = useState<string | undefined>(undefined);
   const [viewOnly, setViewOnly] = useState<boolean>(true);
   const [connected, setVncConnected] = useState<boolean>(false);
@@ -294,107 +290,4 @@ function AppComponent(props: App): JSX.Element {
       </>
     </AppWindow>
   );
-}
-
-/* App toolbar component for the app CoBrowser */
-function ToolbarComponent(props: App): JSX.Element {
-  const s = props.data.state as AppState;
-  const updateState = useAppStore((state) => state.updateState);
-  const { user } = useUser();
-
-  return (
-    <>
-      {/* {vmId} */}
-      {props._createdBy === user?._id && (
-        <>
-          {/* <ButtonGroup isAttached size="xs" colorScheme="teal" mr="1"> */}
-          <Tooltip
-            label={s.nonOwnerViewOnly ? 'Controls are not being shared' : 'Controls are being shared'}
-            openDelay={400}
-            hasArrow
-            placement="top"
-          >
-            <Button
-              size="xs"
-              colorScheme={s.nonOwnerViewOnly ? 'red' : 'green'}
-              onClick={() => {
-                updateState(props._id, { nonOwnerViewOnly: !s.nonOwnerViewOnly });
-              }}
-            >
-              {s.nonOwnerViewOnly ? <TbMouseOff /> : <TbMouse />}
-            </Button>
-          </Tooltip>
-          {/* </ButtonGroup> */}
-        </>
-      )}
-      {/* <Popover trigger="hover">
-        {() => (
-          <>
-            <PopoverTrigger>
-              <Button size="xs" colorScheme="teal" ml="1" mr="0" p={0}>
-                <PiTabs />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent fontSize={'sm'} width={'375px'}>
-              <PopoverArrow />
-              <PopoverCloseButton />
-              <PopoverHeader>Urls</PopoverHeader>
-              <PopoverBody userSelect={'text'}>
-                <UnorderedList>
-                  {s.urls.map((url) => (
-                    <ListItem key={url} wordBreak="break-all">
-                      <Link target="_blank" href={url} wordBreak="break-all">
-                        {url}
-                      </Link>
-                    </ListItem>
-                  ))}
-                </UnorderedList>
-              </PopoverBody>
-            </PopoverContent>
-          </>
-        )}
-      </Popover> */}
-      <Tooltip label="Click to paste" openDelay={400} hasArrow placement="top">
-        <Button
-          size="xs"
-          ml="1"
-          colorScheme="teal"
-          onClick={async () => {
-            try {
-              const clipboardData = await navigator.clipboard.readText();
-              if (clipboardData) {
-                updateState(props._id, { clipboard: clipboardData });
-              }
-            } catch (error) {
-              // console.error('Failed to read clipboard:', error);
-            }
-          }}
-        >
-          <FaClipboard />
-        </Button>
-      </Tooltip>
-      <Tooltip label="Toggle Audio" openDelay={400} hasArrow placement="top">
-        <Button
-          size="xs"
-          ml="1"
-          colorScheme="teal"
-          onClick={() => {
-            updateState(props._id, { audio: !s.audio });
-          }}
-        >
-          {s.audio ? <MdVolumeUp /> : <MdVolumeOff />}
-        </Button>
-      </Tooltip>
-    </>
-  );
-}
-
-/**
- * Grouped App toolbar component, this component will display when a group of apps are selected
- * @returns JSX.Element | null
- */
-const GroupedToolbarComponent = (props: { apps: AppGroup }) => {
-  return null;
 };
-
-export default { AppComponent, ToolbarComponent, GroupedToolbarComponent };
