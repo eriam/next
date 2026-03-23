@@ -231,10 +231,15 @@ export function AppWindow(props: WindowProps) {
     }
   }, [props.app.data.raised]);
 
+  // One-time init: ensure pinned field exists on older apps that predate the field
   useEffect(() => {
     if (props.app.data.pinned === undefined) {
       update(props.app._id, { pinned: false });
     }
+  }, []);
+
+  // Deselect on unmount so stale selectedAppId doesn't linger
+  useEffect(() => {
     return () => {
       if (selectedApp === props.app._id) {
         setSelectedApp('');
@@ -448,7 +453,7 @@ export function AppWindow(props: WindowProps) {
 
   function handleAppTouchMove(e: React.PointerEvent) {
     e.stopPropagation();
-    setAppWasDragged(true);
+    if (!appWasDragged) setAppWasDragged(true);
   }
 
   // ─── Double-click on resize handle to snap to viewport ────────────────────

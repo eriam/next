@@ -258,10 +258,7 @@ const DrawBox = (props: BoxProps) => {
       } else {
         // Remove apps if not in box area
         if (rectSelectedApps.includes(app._id)) {
-          const newArray = rectSelectedApps;
-          const index = newArray.indexOf(app._id);
-          newArray.splice(index, 1);
-          setRectSelectedApps([...newArray]);
+          setRectSelectedApps((prev) => prev.filter((id) => id !== app._id));
         }
       }
     }
