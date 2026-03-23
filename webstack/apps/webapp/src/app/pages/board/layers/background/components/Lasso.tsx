@@ -1,5 +1,5 @@
 /**
- * Copyright (c) SAGE3 Development Team 2022. All Rights Reserved
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
  * University of Hawaii, University of Illinois Chicago, Virginia Tech
  *
  * Distributed under the terms of the SAGE3 License.  The full license is in
@@ -98,18 +98,19 @@ export function Lasso(props: LassoProps) {
   // Mouse Behaviours
   const mouseDown = (ev: React.MouseEvent<SVGElement>) => {
     if (ev.button !== 0) return;
+    // macOS ctrl+left-click produces a context menu — skip it
     if (ev.ctrlKey) return;
 
     if (ev.shiftKey) {
-      // Shift+drag on empty board: seed from single-selected app if one exists.
-      // Note: BackgroundLayer preserves selectedAppId on shift+lasso clicks so we can read it here.
+      // Shift+draw: seed the lasso group from the currently single-selected app (if any)
+      // so the user can extend an existing selection without losing it.
+      // BackgroundLayer skips clearing selectedAppId on shift+mousedown so we can read it here.
       if (selectedAppId) {
         addSelectedApp(selectedAppId);
         setSelectedApp('');
-        setModifierAction('none');
-      } else {
-        setModifierAction('inverse');
       }
+      // No modifier needed — seeded apps live in clickSelectedApps inside DrawBox
+      setModifierAction('none');
     } else {
       clearSelectedApps();
       setModifierAction('none');
@@ -118,7 +119,8 @@ export function Lasso(props: LassoProps) {
   };
 
   const mouseUp = () => {
-    if (!mousedown) return; // No lasso was started (e.g. handled a shift+click on an app)
+    // mousedown may be false if the user released over the SVG after a shift+click on an app
+    if (!mousedown) return;
     lassoEnd();
   };
 

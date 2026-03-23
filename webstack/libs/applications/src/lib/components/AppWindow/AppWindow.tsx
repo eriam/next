@@ -1,5 +1,5 @@
 /**
- * Copyright (c) SAGE3 Development Team 2024. All Rights Reserved
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
  * University of Hawaii, University of Illinois Chicago, Virginia Tech
  *
  * Distributed under the terms of the SAGE3 License.  The full license is in
@@ -411,17 +411,20 @@ export function AppWindow(props: WindowProps) {
   async function handleAppClick(e: React.MouseEvent) {
     e.stopPropagation();
     if (primaryActionMode === 'grab' || primaryActionMode === 'linker') return;
-    if (appWasDragged) {
-      setAppWasDragged(false);
-      return;
-    }
-    // Shift+click in lasso mode: toggle this app in/out of the lasso selection
+    // Shift+click in lasso mode: toggle this app in/out of the lasso selection.
+    // Must be checked before appWasDragged — any mouse movement during the click
+    // would set appWasDragged and swallow the first click otherwise.
     if (primaryActionMode === 'lasso' && e.shiftKey) {
+      setAppWasDragged(false);
       if (isGrouped) {
         removeSelectedApp(props.app._id);
       } else {
         addSelectedApp(props.app._id);
       }
+      return;
+    }
+    if (appWasDragged) {
+      setAppWasDragged(false);
       return;
     }
     handleBringAppForward();
@@ -432,6 +435,8 @@ export function AppWindow(props: WindowProps) {
   function handleAppTouchStart(e: React.PointerEvent) {
     e.stopPropagation();
     if (primaryActionMode === 'grab' || primaryActionMode === 'linker') return;
+    // In lasso mode, shift+click toggle is handled entirely in handleAppClick
+    if (primaryActionMode === 'lasso' && e.shiftKey) return;
     if (appWasDragged) {
       setAppWasDragged(false);
     } else {
