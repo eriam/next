@@ -125,7 +125,7 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
   /////////////////////////////////
   // User Target Element Checker //
   /////////////////////////////////
-  const draggedOnCheck = (target: HTMLElement) => {
+  const draggedOnCheck = (target: HTMLElement, shiftKey = false) => {
     // const target = event.target as HTMLElement;
     // Target.id was done because of the following assumption: using ids is faster than using classList.contains(...)
     if (target.id === 'board') {
@@ -133,7 +133,8 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
       setSelectedApp('');
     } else if ([target.id === 'lasso', target.id === 'whiteboard'].some((condition) => condition)) {
       setStartedDragOn('board-actions');
-      setSelectedApp('');
+      // Preserve the single-selected app when shift is held so lasso can seed from it
+      if (!shiftKey) setSelectedApp('');
     } else if (target.classList.contains('handle')) {
       setStartedDragOn('app');
     } else if (target.classList.contains('app-window-resize-handle')) {
@@ -220,7 +221,7 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
       if (event.ctrlKey && event.buttons & 1) {
         setStartedDragOn('other');
       } else {
-        draggedOnCheck(event.target as HTMLElement);
+        draggedOnCheck(event.target as HTMLElement, event.shiftKey);
       }
     };
 

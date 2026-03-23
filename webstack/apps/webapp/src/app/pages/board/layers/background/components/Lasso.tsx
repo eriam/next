@@ -36,6 +36,9 @@ export function Lasso(props: LassoProps) {
   const setLassoMode = useUIStore((state) => state.setLassoMode);
   const selectedApps = useUIStore((state) => state.selectedAppsIds);
   const clearSelectedApps = useUIStore((state) => state.clearSelectedApps);
+  const selectedAppId = useUIStore((state) => state.selectedAppId);
+  const setSelectedApp = useUIStore((state) => state.setSelectedApp);
+  const addSelectedApp = useUIStore((state) => state.addSelectedApp);
 
   // Mouse Positions
   const [mousedown, setMouseDown] = useState(false);
@@ -94,21 +97,28 @@ export function Lasso(props: LassoProps) {
 
   // Mouse Behaviours
   const mouseDown = (ev: React.MouseEvent<SVGElement>) => {
-    if (ev.button == 0) {
-      // Prevent lasso for everyone due to MacOS ctrl + leftclick bringing up context menu
-      if (ev.ctrlKey) {
-        return;
-      }
+    if (ev.button !== 0) return;
+    if (ev.ctrlKey) return;
 
-      if (ev.shiftKey === false) {
-        clearSelectedApps();
+    if (ev.shiftKey) {
+      // Shift+drag on empty board: seed from single-selected app if one exists.
+      // Note: BackgroundLayer preserves selectedAppId on shift+lasso clicks so we can read it here.
+      if (selectedAppId) {
+        addSelectedApp(selectedAppId);
+        setSelectedApp('');
+        setModifierAction('none');
+      } else {
+        setModifierAction('inverse');
       }
-      setModifierAction(ev.shiftKey ? 'inverse' : 'none');
-      lassoStart(ev.clientX, ev.clientY);
+    } else {
+      clearSelectedApps();
+      setModifierAction('none');
     }
+    lassoStart(ev.clientX, ev.clientY);
   };
 
   const mouseUp = () => {
+    if (!mousedown) return; // No lasso was started (e.g. handled a shift+click on an app)
     lassoEnd();
   };
 
