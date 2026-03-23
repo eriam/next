@@ -1,5 +1,5 @@
 /**
- * Copyright (c) SAGE3 Development Team 2022. All Rights Reserved
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
  * University of Hawaii, University of Illinois Chicago, Virginia Tech
  *
  * Distributed under the terms of the SAGE3 License.  The full license is in
@@ -125,15 +125,17 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
   /////////////////////////////////
   // User Target Element Checker //
   /////////////////////////////////
-  const draggedOnCheck = (target: HTMLElement) => {
-    // const target = event.target as HTMLElement;
-    // Target.id was done because of the following assumption: using ids is faster than using classList.contains(...)
+  // Classifies where a mousedown landed so move handlers know whether to pan the board.
+  // Runs in the capture phase (before element handlers), so it sees every click first.
+  // shiftKey: when shift is held on the lasso SVG, preserve selectedAppId so Lasso.tsx
+  // can seed it into the new lasso group before clearing it.
+  const draggedOnCheck = (target: HTMLElement, shiftKey = false) => {
     if (target.id === 'board') {
       setStartedDragOn('board');
       setSelectedApp('');
-    } else if ([target.id === 'lasso', target.id === 'whiteboard'].some((condition) => condition)) {
+    } else if (target.id === 'lasso' || target.id === 'whiteboard') {
       setStartedDragOn('board-actions');
-      setSelectedApp('');
+      if (!shiftKey) setSelectedApp('');
     } else if (target.classList.contains('handle')) {
       setStartedDragOn('app');
     } else if (target.classList.contains('app-window-resize-handle')) {
@@ -220,7 +222,7 @@ export function BackgroundLayer(props: BackgroundLayerProps) {
       if (event.ctrlKey && event.buttons & 1) {
         setStartedDragOn('other');
       } else {
-        draggedOnCheck(event.target as HTMLElement);
+        draggedOnCheck(event.target as HTMLElement, event.shiftKey);
       }
     };
 

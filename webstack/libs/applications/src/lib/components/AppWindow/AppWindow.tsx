@@ -1,5 +1,5 @@
 /**
- * Copyright (c) SAGE3 Development Team 2024. All Rights Reserved
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
  * University of Hawaii, University of Illinois Chicago, Virginia Tech
  *
  * Distributed under the terms of the SAGE3 License.  The full license is in
@@ -122,6 +122,8 @@ export function AppWindow(props: WindowProps) {
   // Selected Apps Info
   const setSelectedApp = useUIStore((state) => state.setSelectedApp);
   const clearSelectedApps = useUIStore((state) => state.clearSelectedApps);
+  const addSelectedApp = useUIStore((state) => state.addSelectedApp);
+  const removeSelectedApp = useUIStore((state) => state.removeSelectedApp);
   const selectedApp = useUIStore((state) => state.selectedAppId);
   const selected = selectedApp === props.app._id;
   const selectedApps = useUIStore((state) => state.selectedAppsIds);
@@ -248,6 +250,8 @@ export function AppWindow(props: WindowProps) {
 
   function handleDragPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!canDrag) return;
+    // In lasso mode, shift+click toggles selection — let it through to onClick
+    if (primaryActionMode === 'lasso' && e.shiftKey) return;
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragActiveRef.current = true;
@@ -407,18 +411,32 @@ export function AppWindow(props: WindowProps) {
   async function handleAppClick(e: React.MouseEvent) {
     e.stopPropagation();
     if (primaryActionMode === 'grab' || primaryActionMode === 'linker') return;
+    // Shift+click in lasso mode: toggle this app in/out of the lasso selection.
+    // Must be checked before appWasDragged — any mouse movement during the click
+    // would set appWasDragged and swallow the first click otherwise.
+    if (primaryActionMode === 'lasso' && e.shiftKey) {
+      setAppWasDragged(false);
+      if (isGrouped) {
+        removeSelectedApp(props.app._id);
+      } else {
+        addSelectedApp(props.app._id);
+      }
+      return;
+    }
     if (appWasDragged) {
       setAppWasDragged(false);
-    } else {
-      handleBringAppForward();
-      clearSelectedApps();
-      setSelectedApp(props.app._id);
+      return;
     }
+    handleBringAppForward();
+    clearSelectedApps();
+    setSelectedApp(props.app._id);
   }
 
   function handleAppTouchStart(e: React.PointerEvent) {
     e.stopPropagation();
     if (primaryActionMode === 'grab' || primaryActionMode === 'linker') return;
+    // In lasso mode, shift+click toggle is handled entirely in handleAppClick
+    if (primaryActionMode === 'lasso' && e.shiftKey) return;
     if (appWasDragged) {
       setAppWasDragged(false);
     } else {
