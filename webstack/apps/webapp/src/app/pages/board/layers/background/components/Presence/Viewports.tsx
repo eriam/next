@@ -131,7 +131,7 @@ function UserViewport(props: UserViewportProps) {
     const dy = (e.clientY - titleDragStartClientRef.current.y) / props.scale;
     const newX = titleDragStartPosRef.current.x + dx;
     const newY = titleDragStartPosRef.current.y + dy;
-    // Update box position to follow title bar during drag
+    setPos({ x: newX, y: newY });
     setPos2({ x: newX, y: newY });
   }
 
