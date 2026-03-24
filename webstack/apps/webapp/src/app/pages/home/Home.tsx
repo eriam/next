@@ -156,6 +156,17 @@ export function HomePage() {
   // Selected board ref — used to scroll the card into view
   const scrollToBoardRef = useRef<null | HTMLDivElement>(null);
 
+  // Sidebar width — user-resizable via drag handle, persisted in localStorage
+  const SIDEBAR_MIN = 180;
+  // 600px gives enough room to display a full 50-character room name at the default font size.
+  // (50 chars × ~8.5px avg width) + ~158px of nested padding/labels ≈ 583px needed.
+  const SIDEBAR_MAX = 600;
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('sage3-sidebar-width');
+    return stored ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, parseInt(stored, 10))) : 240;
+  });
+  const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
   // Toast to inform user that they are not a member of a room
   const toast = useToast();
 
@@ -178,6 +189,10 @@ export function HomePage() {
   const homeSectionColor = useHexColor(homeSectionValue);
   const searchBarColorValue = useColorModeValue('gray.100', '#2c2c2c');
   const searchBarColor = useHexColor(searchBarColorValue);
+  const dividerLineValue = useColorModeValue('gray.300', 'gray.600');
+  const dividerLineColor = useHexColor(dividerLineValue);
+  const dividerLineHoverValue = useColorModeValue('gray.500', 'gray.400');
+  const dividerLineHoverColor = useHexColor(dividerLineHoverValue);
   const searchPlaceholderColorValue = useColorModeValue('gray.400', 'gray.100');
   const searchPlaceholderColor = useHexColor(searchPlaceholderColorValue);
   const searchBgColorValue = useColorModeValue('gray.50', 'gray.800');
@@ -793,10 +808,11 @@ export function HomePage() {
       {/* Sidebar Drawer */}
       <Box
         borderRadius={cardRadius}
-        width="20%"
-        minWidth="220px"
-        maxWidth="400px"
-        transition="width 0.5s"
+        width={`${sidebarWidth}px`}
+        minWidth={`${SIDEBAR_MIN}px`}
+        maxWidth={`${SIDEBAR_MAX}px`}
+        flexShrink={0}
+        mr="1.5"
         height="100%"
         display="flex"
         flexDirection="column"
@@ -827,7 +843,7 @@ export function HomePage() {
                   </Box>
                 </Box>
               </MenuButton>
-              <MenuList width="20%" minWidth="220px" maxWidth="400px">
+              <MenuList width={`${sidebarWidth}px`}>
                 {hubs.map((hub) => {
                   return (
                     <MenuItem
@@ -941,8 +957,8 @@ export function HomePage() {
                           key={'tooltip_room' + room._id}
                           openDelay={400}
                           hasArrow
-                          placement="top"
-                          label={room.data.description ? room.data.description : ""}
+                          placement="right"
+                          label={room.data.description ? `${room.data.name} — ${room.data.description}` : room.data.name}
                           closeOnScroll
                         >
                           <Box
@@ -986,6 +1002,39 @@ export function HomePage() {
         </Box>
       </Box>
 
+      {/* Drag handle — grab to resize the sidebar */}
+      <Box
+        width="16px"
+        height="100%"
+        flexShrink={0}
+        cursor="col-resize"
+        role="group"
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+          sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+        }}
+        onPointerMove={(e) => {
+          if (!sidebarDragRef.current) return;
+          const delta = e.clientX - sidebarDragRef.current.startX;
+          const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
+          setSidebarWidth(next);
+        }}
+        onPointerUp={(e) => {
+          if (!sidebarDragRef.current) return;
+          (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+          const delta = e.clientX - sidebarDragRef.current.startX;
+          const final = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
+          localStorage.setItem('sage3-sidebar-width', String(final));
+          sidebarDragRef.current = null;
+        }}
+      >
+        <Box flex="1" width="2px" bg={dividerLineColor} _groupHover={{ bg: dividerLineHoverColor }} transition="background 0.15s" />
+      </Box>
+
       {/* Selected Room */}
       {selectedRoom && rooms.length > 0 && (
         <Box
@@ -996,7 +1045,7 @@ export function HomePage() {
           maxHeight="100svh"
           height="100%"
           borderRadius={cardRadius}
-          marginLeft="3"
+          marginLeft="1.5"
           p={[1, 4, 4, 6]} // top right bottom left
         >
           <Box width="100%" position="relative">
@@ -1266,7 +1315,7 @@ export function HomePage() {
           maxHeight="100svh"
           height="100%"
           borderRadius={cardRadius}
-          marginLeft="3"
+          marginLeft="1.5"
           width="100%"
           overflow="hidden"
           py="2"
