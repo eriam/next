@@ -25,22 +25,22 @@ import {
   TabPanels,
   Tabs,
   Tooltip,
+  Button,
   Menu,
   MenuButton,
   MenuItem,
   MenuList,
+  IconButton,
   Input,
   InputGroup,
   InputLeftElement,
-  Flex,
-  IconButton,
   HStack,
   Divider,
   useOutsideClick,
 } from '@chakra-ui/react';
 
 // Icons
-import { MdAdd, MdHome, MdSearch, MdGridView, MdList, MdPeople, MdFolder, MdDashboard, MdSettings, MdExitToApp, MdMenu, MdRefresh } from 'react-icons/md';
+import { MdAdd, MdHome, MdSearch, MdPeople, MdFolder, MdDashboard, MdSettings, MdExitToApp, MdMenu } from 'react-icons/md';
 import { HiPuzzle } from 'react-icons/hi';
 import { LuChevronsUpDown } from 'react-icons/lu';
 
@@ -63,11 +63,9 @@ import {
   EnterBoardByURLModal,
   EditRoomModal,
   EditBoardModal,
-  EnterBoardModal,
   ConfirmModal,
   Clock,
   isElectron,
-  useUserSettings,
   isUUIDv4,
   MainButton,
   PartyButton,
@@ -77,7 +75,7 @@ import {
 import { AppInfo } from './components/BoardPreview';
 
 // Home Page Components
-import { BoardRow, BoardCard, RoomSearchModal, PasswordJoinRoomModal, AssetList, PluginsList, MembersList } from './components';
+import { BoardCard, RoomSearchModal, PasswordJoinRoomModal, AssetList, PluginsList, MembersList, BoardListPanel } from './components';
 import SearchRow from './components/search/SearchRow';
 
 /**
@@ -129,17 +127,9 @@ export function HomePage() {
   const subscribeToPresence = usePresenceStore((state) => state.subscribe);
 
   // Settings
-  const { setBoardListView, settings } = useUserSettings();
-  const boardListView = settings.selectedBoardListView ? settings.selectedBoardListView : 'grid';
-
   // User Selected Room, Board, and User
   const [selectedRoom, setSelectedRoom] = useState<Room | undefined>(undefined);
   const [selectedBoard, setSelectedBoard] = useState<Board | undefined>(undefined);
-
-  // boardSearch: debounced value used for filtering; boardSearchInput: live input display value
-  const [boardSearch, setBoardSearch] = useState<string>('');
-  const [boardSearchInput, setBoardSearchInput] = useState<string>('');
-  const boardSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [passwordProtectedRoom, setPasswordProtectedRoom] = useState<Room | undefined>(undefined);
 
@@ -154,16 +144,23 @@ export function HomePage() {
   const [isSearchSageFocused, setSearchSageFocused] = useState<boolean>(false);
 
   // Selected board ref — used to scroll the card into view
-  const scrollToBoardRef = useRef<null | HTMLDivElement>(null);
+  const scrollToBoardRef = useRef<HTMLDivElement>(null);
+
+  // Sidebar width — user-resizable via drag handle, persisted in localStorage
+  const SIDEBAR_MIN = 180;
+  // 600px gives enough room to display a full 50-character room name at the default font size.
+  // (50 chars × ~8.5px avg width) + ~158px of nested padding/labels ≈ 583px needed.
+  const SIDEBAR_MAX = 600;
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('sage3-sidebar-width');
+    return stored ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, parseInt(stored, 10))) : 240;
+  });
+  const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   // Toast to inform user that they are not a member of a room
   const toast = useToast();
 
   // Colors
-  const tealValue = useColorModeValue('teal.400', 'teal.500');
-  const teal = useHexColor(tealValue);
-  const hoverTealValue = useColorModeValue('teal.500', 'teal.600');
-  const hoverTeal = useHexColor(hoverTealValue);
   const scrollBarValue = useColorModeValue('gray.300', '#666666');
   const scrollBarColor = useHexColor(scrollBarValue);
   const sidebarBackgroundValue = useColorModeValue('gray.50', '#303030');
@@ -178,6 +175,10 @@ export function HomePage() {
   const homeSectionColor = useHexColor(homeSectionValue);
   const searchBarColorValue = useColorModeValue('gray.100', '#2c2c2c');
   const searchBarColor = useHexColor(searchBarColorValue);
+  const dividerTabValue = useColorModeValue('gray.300', 'gray.600');
+  const dividerTabColor = useHexColor(dividerTabValue);
+  const dividerTabHoverValue = useColorModeValue('gray.500', 'gray.400');
+  const dividerTabHoverColor = useHexColor(dividerTabHoverValue);
   const searchPlaceholderColorValue = useColorModeValue('gray.400', 'gray.100');
   const searchPlaceholderColor = useHexColor(searchPlaceholderColorValue);
   const searchBgColorValue = useColorModeValue('gray.50', 'gray.800');
@@ -193,14 +194,9 @@ export function HomePage() {
   const { isOpen: enterBoardByURLModalIsOpen, onOpen: enterBoardByURLModalOnOpen, onClose: enterBoardByURLModalOnClose } = useDisclosure();
   const { isOpen: editRoomModalIsOpen, onOpen: editRoomModalOnOpen, onClose: editRoomModalOnClose } = useDisclosure();
   const { isOpen: editBoardModalIsOpen, onOpen: editBoardModalOnOpen, onClose: editBoardModalOnClose } = useDisclosure();
-  const { isOpen: enterBoardModalIsOpen, onOpen: enterBoardModalOnOpen, onClose: enterBoardModalOnClose } = useDisclosure();
   const { isOpen: roomSearchModal, onOpen: roomSearchModalOnOpen, onClose: roomSearchModalOnClose } = useDisclosure();
   const { isOpen: leaveRoomModalIsOpen, onOpen: leaveRoomModalOnOpen, onClose: leaveRoomModalOnClose } = useDisclosure();
-  const {
-    isOpen: clearRecentBoardsModalIsOpen,
-    onOpen: clearRecentBoardsModalOnOpen,
-    onClose: clearRecentBoardsModalOnClose,
-  } = useDisclosure();
+  const { isOpen: clearRecentBoardsModalIsOpen, onClose: clearRecentBoardsModalOnClose } = useDisclosure();
   const {
     isOpen: passwordJoinRoomModalIsOpen,
     onOpen: passwordJoinRoomModalOnOpen,
@@ -221,7 +217,6 @@ export function HomePage() {
   const createRoomRef = useRef<HTMLButtonElement>(null);
   const searchSageRef = useRef<null | HTMLDivElement>(null);
   const searchInputRef = useRef<null | HTMLDivElement>(null);
-  const enterBoardByURLRef = useRef<HTMLDivElement>(null);
   const roomsRef = useRef<HTMLDivElement>(null);
   const activeBoardsRef = useRef<HTMLParagraphElement>(null);
   const starredBoardsRef = useRef<HTMLParagraphElement>(null);
@@ -276,20 +271,6 @@ export function HomePage() {
     const isMember = roomMembership && roomMembership.data.members ? roomMembership.data.members.includes(userId) : false;
     return isRecent && isMember;
   };
-
-  const boardSearchFilter = (board: Board) => {
-    return fuzzySearch(board.data.name + ' ' + board.data.description, boardSearch);
-  };
-
-  // Filtered + sorted board list for the selected room — avoids recomputing on every render
-  const filteredRoomBoards = useMemo(
-    () =>
-      boards
-        .filter((b) => b.data.roomId === selectedRoom?._id)
-        .filter(boardSearchFilter)
-        .sort((a, b) => a.data.name.localeCompare(b.data.name)),
-    [boards, selectedRoom?._id, boardSearch]
-  );
 
   // Presence grouped by boardId — avoids O(boards × presences) filter on every render
   const presenceByBoard = useMemo(() => {
@@ -452,11 +433,12 @@ export function HomePage() {
       const roomId = selectedRoom ? selectedRoom._id : '';
       updatePresence(userId, { roomId });
     }
-    setBoardSearch('');
-    setBoardSearchInput('');
   }, [selectedRoom]);
 
-  // Fetch board previews when the selected room changes (or on home view)
+  // Fetch board previews when the selected room changes (or on home view).
+  // recentBoards.length and savedBoards.length are included in deps to handle the race condition
+  // where user data (recentBoards/savedBoards) arrives after boards are already loaded — without
+  // them the effect would run with empty filter results and never re-trigger.
   useEffect(() => {
     if (selectedRoom) {
       // Only fetch boardIds not already in state
@@ -474,7 +456,7 @@ export function HomePage() {
       ].map((b) => b._id))].filter((id) => !boardPreviews.has(id));
       fetchPreviews(ids);
     }
-  }, [selectedRoom?._id, boards.length]);
+  }, [selectedRoom?._id, boards.length, recentBoards.length, savedBoards.length]);
 
   // Scroll selected board into view
   useEffect(() => {
@@ -526,30 +508,6 @@ export function HomePage() {
       leaveRoomMembership(selectedRoom._id);
       handleLeaveRoom();
       leaveRoomModalOnClose();
-    }
-  };
-
-  // Handle Join room membership
-  const handleJoinRoomMembership = (room: Room) => {
-    if (canJoin) {
-      if (room.data.isPrivate) {
-        setPasswordProtectedRoom(room);
-      } else {
-        joinRoomMembership(room._id);
-        toast({
-          title: `You have successfully joined ${room.data.name}`,
-          status: 'success',
-          duration: 4 * 1000,
-          isClosable: true,
-        });
-      }
-    } else {
-      toast({
-        title: 'You do not have permission to join rooms',
-        status: 'error',
-        duration: 2 * 1000,
-        isClosable: true,
-      });
     }
   };
 
@@ -748,9 +706,6 @@ export function HomePage() {
         ></EditBoardModal>
       )}
 
-      {/* Enter board modal */}
-      {selectedBoard && <EnterBoardModal board={selectedBoard} isOpen={enterBoardModalIsOpen} onClose={enterBoardModalOnClose} />}
-
       {/* Room Search Modal */}
       <RoomSearchModal isOpen={roomSearchModal} onClose={roomSearchModalOnClose} users={users} />
 
@@ -793,10 +748,11 @@ export function HomePage() {
       {/* Sidebar Drawer */}
       <Box
         borderRadius={cardRadius}
-        width="20%"
-        minWidth="220px"
-        maxWidth="400px"
-        transition="width 0.5s"
+        width={`${sidebarWidth}px`}
+        minWidth={`${SIDEBAR_MIN}px`}
+        maxWidth={`${SIDEBAR_MAX}px`}
+        flexShrink={0}
+        mr="1.5"
         height="100%"
         display="flex"
         flexDirection="column"
@@ -806,28 +762,24 @@ export function HomePage() {
           <Box ref={hubNameRef}>
             <Menu placement="bottom-start">
               <MenuButton
-                marginTop="auto"
-                display="flex"
-                as={Box}
-                backgroundColor={teal}
-                height="32px"
-                alignItems={'center'}
-                justifyContent={'left'}
-                borderRadius="10"
+                as={Button}
+                colorScheme="teal"
+                variant="solid"
+                size="sm"
                 width="100%"
-                transition={'all 0.5s'}
-                _hover={{ cursor: 'pointer', backgroundColor: hoverTeal }}
+                borderRadius="10"
+                px={4}
               >
-                <Box display="flex" justifyContent={'space-between'} alignItems={'center'}>
-                  <Text ml="2" fontSize="lg" fontWeight="bold" whiteSpace={'nowrap'} textOverflow={'ellipsis'} overflow="hidden">
+                <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                  <Text fontWeight="bold" whiteSpace="nowrap" textOverflow="ellipsis" overflow="hidden">
                     {config.serverName}
                   </Text>
-                  <Box pr="3" fontSize="lg">
+                  <Box fontSize="lg" flexShrink={0} ml={2}>
                     <LuChevronsUpDown />
                   </Box>
                 </Box>
               </MenuButton>
-              <MenuList width="20%" minWidth="220px" maxWidth="400px">
+              <MenuList width={`${sidebarWidth}px`}>
                 {hubs.map((hub) => {
                   return (
                     <MenuItem
@@ -844,11 +796,19 @@ export function HomePage() {
             </Menu>
           </Box>
         ) : (
-          <Box bg={teal} borderRadius="10" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" ref={hubNameRef} height="40px">
-            <Text fontSize="24px" fontWeight="bold" whiteSpace={'nowrap'} textOverflow={'ellipsis'} overflow="hidden" pl="2">
+          <Button
+            colorScheme="teal"
+            variant="solid"
+            size="sm"
+            width="100%"
+            borderRadius="10"
+            px={4}
+            pointerEvents="none"
+          >
+            <Text fontWeight="bold" whiteSpace="nowrap" textOverflow="ellipsis" overflow="hidden" width="100%" textAlign="left">
               {config.serverName}
             </Text>
-          </Box>
+          </Button>
         )}
 
         {/* Rooms  section */}
@@ -941,8 +901,8 @@ export function HomePage() {
                           key={'tooltip_room' + room._id}
                           openDelay={400}
                           hasArrow
-                          placement="top"
-                          label={room.data.description ? room.data.description : ""}
+                          placement="right"
+                          label={room.data.description ? `${room.data.name} — ${room.data.description}` : room.data.name}
                           closeOnScroll
                         >
                           <Box
@@ -986,6 +946,38 @@ export function HomePage() {
         </Box>
       </Box>
 
+      {/* Drag handle — grab to resize the sidebar */}
+      <Box width="10px" height="100%" flexShrink={0} display="flex" alignItems="center" justifyContent="center">
+        <Box
+          width="6px"
+          height="150px"
+          borderRadius="full"
+          bg={dividerTabColor}
+          cursor="col-resize"
+          _hover={{ bg: dividerTabHoverColor }}
+          transition="background 0.15s"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+            sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+          }}
+          onPointerMove={(e) => {
+            if (!sidebarDragRef.current) return;
+            const delta = e.clientX - sidebarDragRef.current.startX;
+            const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
+            setSidebarWidth(next);
+          }}
+          onPointerUp={(e) => {
+            if (!sidebarDragRef.current) return;
+            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+            const delta = e.clientX - sidebarDragRef.current.startX;
+            const final = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
+            localStorage.setItem('sage3-sidebar-width', String(final));
+            sidebarDragRef.current = null;
+          }}
+        />
+      </Box>
+
       {/* Selected Room */}
       {selectedRoom && rooms.length > 0 && (
         <Box
@@ -996,7 +988,7 @@ export function HomePage() {
           maxHeight="100svh"
           height="100%"
           borderRadius={cardRadius}
-          marginLeft="3"
+          marginLeft="1.5"
           p={[1, 4, 4, 6]} // top right bottom left
         >
           <Box width="100%" position="relative">
@@ -1091,147 +1083,21 @@ export function HomePage() {
 
                 <TabPanels height="100%">
                   <TabPanel px="0">
-                    <Box display="flex" gap="4">
-                      <Flex gap="2" flexDirection="column">
-                        <Flex align="center" gap="2" justify="flex-start" ml="2">
-                          <Tooltip label="Create New Board" aria-label="Create Board" placement="top" hasArrow>
-                            <IconButton
-                              size="sm"
-                              bg="none"
-                              aria-label="favorite-board"
-                              fontSize="xl"
-                              onFocus={(e) => e.preventDefault()}
-                              onClick={createBoardModalOnOpen}
-                              isDisabled={!canCreateBoards}
-                              _hover={{ transform: 'scale(1.1)', bg: 'none' }}
-                              icon={<MdAdd fontSize="24px" />}
-                            ></IconButton>
-                          </Tooltip>
-
-
-                          <InputGroup size="md" width="425px" my="1">
-                            <InputLeftElement pointerEvents="none">
-                              <MdSearch />
-                            </InputLeftElement>
-                            <Input
-                              placeholder="Search Boards"
-                              _placeholder={{ opacity: 0.7, color: searchPlaceholderColor }}
-                              value={boardSearchInput}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setBoardSearchInput(value);
-                                if (boardSearchDebounceRef.current) clearTimeout(boardSearchDebounceRef.current);
-                                boardSearchDebounceRef.current = setTimeout(() => setBoardSearch(value), 150);
-                              }}
-                              roundedTop="2xl"
-                              _focusVisible={{ bg: searchBarColor, outline: 'none', transition: 'none' }}
-                              bg="inherit"
-                              roundedBottom="2xl"
-                            />
-                          </InputGroup>
-                          <Tooltip label={boardListView === 'grid' ? 'Switch to List View' : 'Switch to Grid View'} placement="top" hasArrow>
-                            <IconButton
-                              size="sm"
-                              bg="none"
-                              aria-label={boardListView === 'grid' ? 'Switch to List View' : 'Switch to Grid View'}
-                              onClick={() => {
-                                setBoardListView(boardListView === 'grid' ? 'list' : 'grid');
-                              }}
-                              icon={boardListView === 'grid' ? <MdList fontSize="24px" /> : <MdGridView fontSize="24px" />}
-                              _hover={{ transform: 'scale(1.1)', bg: 'none' }}
-                            />
-                          </Tooltip>
-                          <Tooltip label="Refresh Board Previews" placement="top" hasArrow>
-                            <IconButton
-                              size="sm"
-                              bg="none"
-                              aria-label="Refresh board previews"
-                              isLoading={previewsLoading}
-                              onClick={refreshPreviews}
-                              icon={<MdRefresh fontSize="24px" />}
-                              _hover={{ transform: 'scale(1.1)', bg: 'none' }}
-                            />
-                          </Tooltip>
-                        </Flex>
-                        {boardListView == 'grid' && (
-                          <Flex
-                            gap="4"
-                            pl="2"
-                            py="1"
-                            display="flex"
-                            flexWrap="wrap"
-                            justifyContent="left"
-                            style={{
-                              maxHeight: 'calc(100svh - 270px)',
-                              width: '100%',
-                              maxWidth: '2200px',
-                            }}
-                            margin="0 auto"
-                            overflowY="scroll"
-                            overflowX="hidden"
-                            minWidth="420px"
-                            css={{
-                              '&::-webkit-scrollbar': {
-                                background: 'transparent',
-                                width: '10px',
-                              },
-                              '&::-webkit-scrollbar-thumb': {
-                                background: scrollBarColor,
-                                borderRadius: '48px',
-                              },
-                            }}
-                          >
-                            {filteredRoomBoards.map((board) => (
-                                <Box key={board._id} ref={board._id === selectedBoard?._id ? scrollToBoardRef : undefined}>
-                                  <BoardCard
-                                    board={board}
-                                    room={selectedRoom}
-                                    onClick={() => handleBoardClick(board)}
-                                    selected={selectedBoard ? selectedBoard._id === board._id : false}
-                                    usersPresent={presenceByBoard.get(board._id) ?? []}
-                                    appInfo={boardPreviews.get(board._id) ?? []}
-                                  />
-                                </Box>
-                              ))}
-                          </Flex>
-                        )}
-
-                        {boardListView == 'list' && (
-                          <VStack
-                            gap="3"
-                            alignItems="left"
-                            pl="2"
-                            style={{ height: 'calc(100svh - 270px)' }}
-                            overflowY="scroll"
-                            overflowX="hidden"
-                            minWidth="420px"
-                            css={{
-                              '&::-webkit-scrollbar': {
-                                background: 'transparent',
-                                width: '5px',
-                              },
-                              '&::-webkit-scrollbar-thumb': {
-                                background: scrollBarColor,
-                                borderRadius: '48px',
-                              },
-                            }}
-                          >
-                            {filteredRoomBoards.map((board) => (
-                                <Box key={board._id} ref={board._id === selectedBoard?._id ? scrollToBoardRef : undefined}>
-                                  <BoardRow
-                                    key={board._id}
-                                    board={board}
-                                    room={selectedRoom}
-                                    onClick={() => handleBoardClick(board)}
-                                    selected={selectedBoard ? selectedBoard._id === board._id : false}
-                                    usersPresent={(presenceByBoard.get(board._id) ?? []).length}
-                                  />
-                                </Box>
-                              ))}
-                          </VStack>
-                        )}
-                      </Flex>
-                    </Box>
+                    {/* key={selectedRoom?._id} remounts the panel on room change, resetting search state */}
+                    <BoardListPanel
+                      key={selectedRoom?._id}
+                      boards={boards}
+                      selectedRoom={selectedRoom}
+                      selectedBoard={selectedBoard}
+                      presenceByBoard={presenceByBoard}
+                      boardPreviews={boardPreviews}
+                      previewsLoading={previewsLoading}
+                      canCreateBoards={canCreateBoards}
+                      scrollToBoardRef={scrollToBoardRef}
+                      onCreateBoard={createBoardModalOnOpen}
+                      onRefreshPreviews={refreshPreviews}
+                      onBoardClick={handleBoardClick}
+                    />
                   </TabPanel>
                   <TabPanel px="0">
                     <MembersList room={selectedRoom} />
@@ -1266,7 +1132,7 @@ export function HomePage() {
           maxHeight="100svh"
           height="100%"
           borderRadius={cardRadius}
-          marginLeft="3"
+          marginLeft="1.5"
           width="100%"
           overflow="hidden"
           py="2"
