@@ -156,6 +156,7 @@ export function HomePage() {
     return stored ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, parseInt(stored, 10))) : 240;
   });
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Toast to inform user that they are not a member of a room
   const toast = useToast();
@@ -747,6 +748,7 @@ export function HomePage() {
 
       {/* Sidebar Drawer */}
       <Box
+        ref={sidebarRef}
         borderRadius={cardRadius}
         width={`${sidebarWidth}px`}
         minWidth={`${SIDEBAR_MIN}px`}
@@ -965,7 +967,7 @@ export function HomePage() {
             if (!sidebarDragRef.current) return;
             const delta = e.clientX - sidebarDragRef.current.startX;
             const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
-            setSidebarWidth(next);
+            if (sidebarRef.current) sidebarRef.current.style.width = `${next}px`;
           }}
           onPointerUp={(e) => {
             if (!sidebarDragRef.current) return;
@@ -973,6 +975,7 @@ export function HomePage() {
             const delta = e.clientX - sidebarDragRef.current.startX;
             const final = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
             localStorage.setItem('sage3-sidebar-width', String(final));
+            setSidebarWidth(final);
             sidebarDragRef.current = null;
           }}
         />
