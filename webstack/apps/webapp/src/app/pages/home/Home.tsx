@@ -156,6 +156,33 @@ export function HomePage() {
     return stored ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, parseInt(stored, 10))) : 240;
   });
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Begin drag: capture pointer and record start position
+  const onSidebarDragHandlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+  };
+
+  // During drag: mutate DOM directly to avoid re-rendering the whole page on every mouse move
+  const onSidebarDragHandlePointerMove = (e: React.PointerEvent) => {
+    if (!sidebarDragRef.current) return;
+    const delta = e.clientX - sidebarDragRef.current.startX;
+    const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
+    if (sidebarRef.current) sidebarRef.current.style.width = `${next}px`;
+  };
+
+  // End drag: sync final width into React state and persist to localStorage
+  const onSidebarDragHandlePointerUp = (e: React.PointerEvent) => {
+    if (!sidebarDragRef.current) return;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    const delta = e.clientX - sidebarDragRef.current.startX;
+    const final = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
+    localStorage.setItem('sage3-sidebar-width', String(final));
+    setSidebarWidth(final);
+    sidebarDragRef.current = null;
+  };
 
   // Toast to inform user that they are not a member of a room
   const toast = useToast();
@@ -747,6 +774,7 @@ export function HomePage() {
 
       {/* Sidebar Drawer */}
       <Box
+        ref={sidebarRef}
         borderRadius={cardRadius}
         width={`${sidebarWidth}px`}
         minWidth={`${SIDEBAR_MIN}px`}
@@ -956,25 +984,9 @@ export function HomePage() {
           cursor="col-resize"
           _hover={{ bg: dividerTabHoverColor }}
           transition="background 0.15s"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            (e.target as HTMLElement).setPointerCapture(e.pointerId);
-            sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth };
-          }}
-          onPointerMove={(e) => {
-            if (!sidebarDragRef.current) return;
-            const delta = e.clientX - sidebarDragRef.current.startX;
-            const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
-            setSidebarWidth(next);
-          }}
-          onPointerUp={(e) => {
-            if (!sidebarDragRef.current) return;
-            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-            const delta = e.clientX - sidebarDragRef.current.startX;
-            const final = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sidebarDragRef.current.startWidth + delta));
-            localStorage.setItem('sage3-sidebar-width', String(final));
-            sidebarDragRef.current = null;
-          }}
+          onPointerDown={onSidebarDragHandlePointerDown}
+          onPointerMove={onSidebarDragHandlePointerMove}
+          onPointerUp={onSidebarDragHandlePointerUp}
         />
       </Box>
 
