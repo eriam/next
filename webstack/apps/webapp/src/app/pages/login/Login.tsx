@@ -1,5 +1,5 @@
 /**
- * Copyright (c) SAGE3 Development Team 2025. All Rights Reserved
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
  * University of Hawaii, University of Illinois Chicago, Virginia Tech
  *
  * Distributed under the terms of the SAGE3 License.  The full license is in
@@ -12,6 +12,7 @@ import { Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack
 
 import { FcGoogle } from 'react-icons/fc';
 import { FaGhost, FaApple } from 'react-icons/fa';
+import { SiKeycloak } from 'react-icons/si';
 
 import { isElectron, useAuth, useRouteNav, GetServerInfo } from '@sage3/frontend';
 
@@ -22,7 +23,7 @@ import cilogonLogo from '../../../assets/cilogon.png';
  * Login page with authentication options and board context handling
  */
 export function LoginPage() {
-  const { auth, googleLogin, appleLogin, ciLogin, guestLogin, spectatorLogin, loading: authLoading } = useAuth();
+  const { auth, googleLogin, appleLogin, ciLogin, keycloakLogin, guestLogin, spectatorLogin, loading: authLoading } = useAuth();
   const { toCreateUser } = useRouteNav();
   const toast = useToast();
   
@@ -173,6 +174,22 @@ export function LoginPage() {
         case 'apple_oauth_error':
           title = 'Apple OAuth Error';
           description = 'Apple returned an authentication error. Please try again.';
+          break;
+        case 'keycloak_error':
+          title = 'Keycloak Login Failed';
+          description = 'There was an error with Keycloak authentication. Please try again.';
+          break;
+        case 'keycloak_no_user':
+          title = 'Keycloak Login Issue';
+          description = 'Keycloak authentication succeeded but no user data was received. Please try again.';
+          break;
+        case 'keycloak_login_failed':
+          title = 'Keycloak Session Error';
+          description = 'Unable to create your session after Keycloak login. Please try again.';
+          break;
+        case 'keycloak_oauth_error':
+          title = 'Keycloak OAuth Error';
+          description = 'Keycloak returned an authentication error. Please try again.';
           break;
         default:
           title = 'Authentication Error';
@@ -368,7 +385,7 @@ export function LoginPage() {
           <ButtonGroup isAttached size="lg" width="100%">
             <IconButton
               width="80px"
-              aria-label="Login with Google"
+              aria-label="Login with CILogon"
               icon={<Image w="36px" h="36px" src={cilogonLogo} alt="CILogon Logo" />}
               pointerEvents="none"
               borderRight={`3px solid`}
@@ -376,6 +393,21 @@ export function LoginPage() {
             />
             <Button width="100%" isDisabled={shouldDisable || !logins.includes('cilogon')} justifyContent="left" onClick={ciLogin}>
               Login with CILogon
+            </Button>
+          </ButtonGroup>
+
+          {/* Keycloak Auth Service */}
+          <ButtonGroup isAttached size="lg" width="100%">
+            <IconButton
+              width="80px"
+              aria-label="Login with Keycloak"
+              icon={<SiKeycloak size="30" width="50px" />}
+              pointerEvents="none"
+              borderRight={`3px solid`}
+              borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+            />
+            <Button width="100%" isDisabled={shouldDisable || !logins.includes('keycloak')} justifyContent="left" onClick={keycloakLogin}>
+              Login with Keycloak
             </Button>
           </ButtonGroup>
 
