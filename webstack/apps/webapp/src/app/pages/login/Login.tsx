@@ -26,11 +26,11 @@ export function LoginPage() {
   const { auth, googleLogin, appleLogin, ciLogin, keycloakLogin, guestLogin, spectatorLogin, loading: authLoading } = useAuth();
   const { toCreateUser } = useRouteNav();
   const toast = useToast();
-  
+
   const [serverName, setServerName] = useState<string>('');
   const [shouldDisable, setShouldDisable] = useState(false);
   const [logins, setLogins] = useState<string[]>([]);
-  
+
   const logoUrl = '/assets/sage3_banner.webp';
   const thisIsElectron = isElectron();
 
@@ -40,7 +40,7 @@ export function LoginPage() {
   const getReturnToUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const returnTo = urlParams.get('returnTo');
-    
+
     // Validate returnTo URL to prevent open redirects
     if (returnTo) {
       if (returnTo.startsWith('/') && !returnTo.includes('://')) {
@@ -56,15 +56,15 @@ export function LoginPage() {
   const getSavedBoardContext = () => {
     try {
       const savedContext = localStorage.getItem('sage3_pending_board');
-      
+
       if (savedContext) {
         const context = JSON.parse(savedContext);
         console.log('Board Context: Retrieved from localStorage:', context);
-        
+
         // Check if context is not too old (24 hours)
         const isRecent = Date.now() - context.timestamp < 24 * 60 * 60 * 1000;
         const age = Date.now() - context.timestamp;
-        
+
         if (isRecent && context.roomId && context.boardId) {
           console.log(`Board Context: Valid context found (age: ${Math.round(age / 1000)}s)`);
           return context;
@@ -89,7 +89,7 @@ export function LoginPage() {
   const preserveBoardContext = useCallback(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const returnTo = urlParams.get('returnTo');
-    
+
     // Check if returnTo contains board information
     if (returnTo && returnTo.includes('/board/')) {
       const boardMatch = returnTo.match(/\/board\/([^\/]+)\/([^\/]+)/);
@@ -100,9 +100,9 @@ export function LoginPage() {
           boardId,
           timestamp: Date.now(),
           url: window.location.href,
-          source: 'login_returnTo'
+          source: 'login_returnTo',
         };
-        
+
         try {
           localStorage.setItem('sage3_pending_board', JSON.stringify(boardContext));
           console.log('Board Context: Preserved from returnTo parameter:', boardContext);
@@ -206,7 +206,7 @@ export function LoginPage() {
         title,
         description,
         details: details ? decodeURIComponent(details) : 'No additional details',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
       // Show toast for user feedback (may be missed due to redirects)
@@ -216,7 +216,7 @@ export function LoginPage() {
         status: 'error',
         duration: 8000,
         isClosable: true,
-        position: 'top'
+        position: 'top',
       });
 
       // Clear error parameters from URL to prevent showing the error again
@@ -271,7 +271,7 @@ export function LoginPage() {
     console.log('Auth State Check:', {
       auth: auth ? { id: auth.id, provider: auth.provider, email: auth.email } : null,
       authLoading,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     // Don't make decisions while still loading auth
@@ -282,7 +282,7 @@ export function LoginPage() {
 
     if (auth) {
       console.log('Auth Success: Authentication present, redirecting to account creation/validation');
-      
+
       // Check for saved board context first to preserve it
       const savedContext = getSavedBoardContext();
       if (savedContext) {
@@ -311,6 +311,11 @@ export function LoginPage() {
   }, [authNavCheck]);
 
   const { colorMode } = useColorMode();
+
+  const isGoogle = !shouldDisable && logins.includes('google');
+  const isApple = !shouldDisable && logins.includes('apple');
+  const isCILogon = !shouldDisable && logins.includes('cilogon');
+  const isKeycloak = !shouldDisable && logins.includes('keycloak');
 
   return (
     <Box display="flex" flexDir={'column'} justifyContent="center" alignItems="center" width="100%" height="100%" position="relative">
@@ -342,74 +347,82 @@ export function LoginPage() {
           </Button>
         </Box>
       ) : (
-              <Box left="2" bottom="2" position="absolute">
-        <Button colorScheme="teal" size="sm" onClick={goToClientDownload}>
-          Download Client
-        </Button>
-      </Box>
+        <Box left="2" bottom="2" position="absolute">
+          <Button colorScheme="teal" size="sm" onClick={goToClientDownload}>
+            Download Client
+          </Button>
+        </Box>
       )}
 
       <Box width="300px">
         <VStack spacing={4}>
           {/* Google Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
-            <IconButton
-              width="80px"
-              aria-label="Login with Google"
-              icon={<FcGoogle size="30" width="50px" />}
-              pointerEvents="none"
-              borderRight={`3px solid`}
-              borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
-            />
-            <Button width="100%" isDisabled={shouldDisable || !logins.includes('google')} justifyContent="left" onClick={googleLogin}>
-              Login with Google
-            </Button>
-          </ButtonGroup>
+          {isGoogle && (
+            <ButtonGroup isAttached size="lg" width="100%">
+              <IconButton
+                width="80px"
+                aria-label="Login with Google"
+                icon={<FcGoogle size="30" width="50px" />}
+                pointerEvents="none"
+                borderRight={`3px solid`}
+                borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+              />
+              <Button width="100%" isDisabled={shouldDisable || !logins.includes('google')} justifyContent="left" onClick={googleLogin}>
+                Login with Google
+              </Button>
+            </ButtonGroup>
+          )}
 
           {/* Apple Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
-            <IconButton
-              width="80px"
-              aria-label="Login with Apple"
-              icon={<FaApple size="30" width="50px" />}
-              pointerEvents="none"
-              borderRight={`3px solid`}
-              borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
-            />
-            <Button width="100%" isDisabled={shouldDisable || !logins.includes('apple')} justifyContent="left" onClick={appleLogin}>
-              Login with Apple
-            </Button>
-          </ButtonGroup>
+          {isApple && (
+            <ButtonGroup isAttached size="lg" width="100%">
+              <IconButton
+                width="80px"
+                aria-label="Login with Apple"
+                icon={<FaApple size="30" width="50px" />}
+                pointerEvents="none"
+                borderRight={`3px solid`}
+                borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+              />
+              <Button width="100%" isDisabled={shouldDisable || !logins.includes('apple')} justifyContent="left" onClick={appleLogin}>
+                Login with Apple
+              </Button>
+            </ButtonGroup>
+          )}
 
           {/* CILogon Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
-            <IconButton
-              width="80px"
-              aria-label="Login with CILogon"
-              icon={<Image w="36px" h="36px" src={cilogonLogo} alt="CILogon Logo" />}
-              pointerEvents="none"
-              borderRight={`3px solid`}
-              borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
-            />
-            <Button width="100%" isDisabled={shouldDisable || !logins.includes('cilogon')} justifyContent="left" onClick={ciLogin}>
-              Login with CILogon
-            </Button>
-          </ButtonGroup>
+          {isCILogon && (
+            <ButtonGroup isAttached size="lg" width="100%">
+              <IconButton
+                width="80px"
+                aria-label="Login with CILogon"
+                icon={<Image w="36px" h="36px" src={cilogonLogo} alt="CILogon Logo" />}
+                pointerEvents="none"
+                borderRight={`3px solid`}
+                borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+              />
+              <Button width="100%" isDisabled={shouldDisable || !logins.includes('cilogon')} justifyContent="left" onClick={ciLogin}>
+                Login with CILogon
+              </Button>
+            </ButtonGroup>
+          )}
 
           {/* Keycloak Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
-            <IconButton
-              width="80px"
-              aria-label="Login with Keycloak"
-              icon={<SiKeycloak size="30" width="50px" />}
-              pointerEvents="none"
-              borderRight={`3px solid`}
-              borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
-            />
-            <Button width="100%" isDisabled={shouldDisable || !logins.includes('keycloak')} justifyContent="left" onClick={keycloakLogin}>
-              Login with Keycloak
-            </Button>
-          </ButtonGroup>
+          {isKeycloak && (
+            <ButtonGroup isAttached size="lg" width="100%">
+              <IconButton
+                width="80px"
+                aria-label="Login with Keycloak"
+                icon={<SiKeycloak size="30" width="50px" />}
+                pointerEvents="none"
+                borderRight={`3px solid`}
+                borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+              />
+              <Button width="100%" isDisabled={shouldDisable || !logins.includes('keycloak')} justifyContent="left" onClick={keycloakLogin}>
+                Login with Keycloak
+              </Button>
+            </ButtonGroup>
+          )}
 
           {/* Guest Auth Service */}
           <ButtonGroup isAttached size="lg" width="100%">
