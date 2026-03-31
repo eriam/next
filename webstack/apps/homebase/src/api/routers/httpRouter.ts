@@ -57,10 +57,6 @@ export function expressAPIRouter(): express.Router {
   router.use('/time', TimeRouter());
   router.use('/logs', LogsRouter());
 
-  // Download the file from an Asset using a public route with a UUIDv5 token
-  // route: /api/files/:id/:token
-  router.use('/files', FilesRouter());
-
   // Authenticate all API Routes
  router.use(SAGEBase.Auth.authenticate);
 

@@ -7,7 +7,8 @@
  */
 
 import * as passport from 'passport';
-import * as LdapStrategy from 'passport-ldapauth';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const LdapStrategy = require('passport-ldapauth');
 
 import { SBAuthDB } from '../SBAuthDatabase';
 
