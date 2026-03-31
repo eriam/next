@@ -1,3 +1,0 @@
-#/bin/sh
-
-docker run --rm -it --name seer -p 9999:9999 seer bash

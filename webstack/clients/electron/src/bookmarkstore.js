@@ -19,34 +19,9 @@ const store = new Store({ name: 'bookmark-store' });
 // Default ServerList
 const defaultBookmarks = [
   {
-    name: 'Chicago',
+    name: 'An example server',
     id: genId(),
-    url: 'https://chicago.sage3.app',
-  },
-  {
-    name: 'Chicago Development',
-    id: genId(),
-    url: 'https://mini.sage3.app',
-  },
-  {
-    name: 'Chicago CodeCell',
-    id: genId(),
-    url: 'https://sagecell.evl.uic.edu',
-  },
-  {
-    name: 'Hawaii',
-    id: genId(),
-    url: 'https://manoa.sage3.app',
-  },
-  {
-    name: 'Hawaii Development',
-    id: genId(),
-    url: 'https://pele.sage3.app',
-  },
-  {
-    name: 'Virgina Tech',
-    id: genId(),
-    url: 'https://sage3.cs.vt.edu',
+    url: 'https://server',
   },
 ];
 

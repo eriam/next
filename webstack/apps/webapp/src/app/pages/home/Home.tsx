@@ -622,10 +622,7 @@ export function HomePage() {
   return (
     // Main Container
     <Box display="flex" width="100svw" height="100svh" alignItems="center" p="3" backgroundColor={mainBackgroundColor}>
-      {/* Party Button */}
-      <Box position="absolute" right="2" bottom="2" zIndex="1000" pl="2" pt="2" backgroundColor={mainBackgroundValue} borderRadius={'lg'}>
-        <PartyButton iconSize="sm" />
-      </Box>
+      {/* Joyride */}
       {/* Check if the user wanted to join a board through a URL / ID */}
       <JoinBoardCheck />
       {/* Modal to create a room */}

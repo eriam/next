@@ -16,8 +16,6 @@ webstack/assets/*
 .vscode/*
 
 
-deployment/.env
-
 # Mac System Files
 .DS_Store
 Thumbs.db
@@ -40,3 +38,6 @@ webstack/keys/yarn.lock
 foresight/_env.sh
 sage_seer/_env.sh
 .aider*
+webstack/clients/electron/SAGE3-linux-x64/
+webstack/clients/electron/SAGE3-linux-x64.tar.gz
+deployment/
