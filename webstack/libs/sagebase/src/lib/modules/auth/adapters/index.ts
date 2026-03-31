@@ -14,3 +14,4 @@ export * from './CILoginAdapter';
 export * from './AppleAdapter';
 export * from './SpectatorAdapter';
 export * from './LocalAdapter';
+export * from './LDAPAdapter';

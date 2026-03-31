@@ -31,14 +31,16 @@ import {
   passportLocalSetup,
   SBAuthLocalConfig,
   passportSpectatorSetup,
-  SBAuthSpectatorConfig
+  SBAuthSpectatorConfig,
+  passportLDAPSetup,
+  SBAuthLDAPConfig,
 } from './adapters/';
 
 
 export type SBAuthConfig = {
   sessionMaxAge: number;
   sessionSecret: string;
-  strategies: ('google' | 'apple' | 'cilogon' | 'guest' | 'jwt' | 'spectator' | 'local')[];
+  strategies: ('google' | 'apple' | 'cilogon' | 'guest' | 'jwt' | 'spectator' | 'local' | 'ldap')[];
   production: boolean;
   googleConfig?: SBAuthGoogleConfig;
   appleConfig?: SBAuthAppleConfig;
@@ -46,6 +48,7 @@ export type SBAuthConfig = {
   guestConfig?: SBAuthGuestConfig;
   cilogonConfig?: SBAuthCILogonConfig;
   localConfig?: SBAuthLocalConfig;
+  ldapConfig?: SBAuthLDAPConfig;
   spectatorConfig?: SBAuthSpectatorConfig;
 };
 
@@ -231,10 +234,37 @@ export class SBAuth {
           );
         }
       }
-      // Local Auth Setup
+      // LDAP Auth Setup
+      if (config.strategies.includes('ldap') && config.ldapConfig) {
+        passportLDAPSetup(config.ldapConfig);
+      }
+
+      // Local Auth Setup (with optional LDAP chaining)
       if (config.strategies.includes('local') && config.localConfig) {
         if (passportLocalSetup()) {
-          express.post(config.localConfig.routeEndpoint, passport.authenticate('local', { successRedirect: '/', failureRedirect: '/' }));
+          const localEndpoint = config.localConfig.routeEndpoint;
+          const ldapEnabled = config.strategies.includes('ldap') && config.ldapConfig;
+
+          if (ldapEnabled) {
+            // Chain: try LDAP first, fall back to local
+            express.post(localEndpoint, (req: Request, res: Response, next: NextFunction) => {
+              passport.authenticate('ldapauth', (err: any, user: any) => {
+                if (user) {
+                  // LDAP auth succeeded
+                  req.logIn(user, (loginErr: any) => {
+                    if (loginErr) return next(loginErr);
+                    return res.redirect('/');
+                  });
+                } else {
+                  // LDAP failed, try local
+                  passport.authenticate('local', { successRedirect: '/', failureRedirect: '/' })(req, res, next);
+                }
+              })(req, res, next);
+            });
+          } else {
+            // Local only
+            express.post(localEndpoint, passport.authenticate('local', { successRedirect: '/', failureRedirect: '/' }));
+          }
         }
       }
     }

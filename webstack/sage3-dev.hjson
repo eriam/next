@@ -127,12 +127,14 @@
     "sessionSecret": "SUPERSECRET!!$$",
     // Max age for a session per user. In milliseconds. 8 days
     "sessionMaxAge": 691200000,
-    // Which login strategies to enable for the server. Available: guest, jwt, google, cilogon
-    // If you enbable them ensure you add the relevant config information below.
+    // Which login strategies to enable for the server. Available: guest, jwt, google, cilogon, local, ldap
+    // If you enable them ensure you add the relevant config information below.
+    // When both "ldap" and "local" are enabled, LDAP is tried first, then local fallback.
     "strategies": [
       "guest",
       "jwt",
-      "local"
+      "local",
+      "ldap"
     ],
     // A List of emails to enable those users to be admins.
     "admins": [],
@@ -145,6 +147,30 @@
     "localConfig": {
       // Endpoint for the spectator login. No need to change this
       "routeEndpoint": "/auth/local"
+    },
+    // LDAP / Active Directory configuration
+    "ldapConfig": {
+      // LDAP server URL
+      "url": "ldap://ldap.example.com:389",
+      // Service account for searching users
+      "bindDN": "cn=admin,dc=example,dc=com",
+      "bindCredentials": "password",
+      // Where to search for users
+      "searchBase": "ou=users,dc=example,dc=com",
+      // Filter to find user. {{username}} is replaced with the login username.
+      "searchFilter": "(uid={{username}})",
+      // Map LDAP group DNs to SAGE3 roles (checked in priority: admin > user > spectator)
+      "groupMapping": {
+        "admin": "cn=sage3-admins,ou=groups,dc=example,dc=com",
+        "user": "cn=sage3-users,ou=groups,dc=example,dc=com",
+        "spectator": "cn=sage3-readonly,ou=groups,dc=example,dc=com"
+      },
+      // Role assigned when authenticated but no group matches
+      "defaultRole": "spectator",
+      // TLS options
+      "tlsOptions": {
+        "rejectUnauthorized": false
+      }
     },
     // Spectator configuration
     "spectatorConfig": {
