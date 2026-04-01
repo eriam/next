@@ -46,7 +46,6 @@ Use the `Build-Push` script to build all service images and push to GHCR:
 | homebase-yjs | `ghcr.io/sage-3/next_yjs` | Yjs collaboration server |
 | homebase-files | `ghcr.io/sage-3/next_files` | File upload/download server |
 | seer | `ghcr.io/sage-3/agents` | Python AI/LLM agent service |
-| pysage3 | `ghcr.io/sage-3/pysage3` | Python SAGE3 proxy daemon |
 
 ## More
 
