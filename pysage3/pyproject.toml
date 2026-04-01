@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["pysage3"]
+packages = ["src/pysage3"]
 
 [project.urls]
 Homepage = "https://github.com/SAGE-3/next"
