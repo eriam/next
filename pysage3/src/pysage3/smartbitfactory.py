@@ -19,15 +19,24 @@ class SmartBitFactory:
 
     # TODO: read these names from some conf file; not hardcoded here
     class_names = {
+        "AssetLink": "assetlink",
+        "BoardLink": "boardlink",
+        "Calculator": "calculator",
         "Chat": "chat",
+        "Clock": "clock",
         "CodeEditor": "codeeditor",
         "CSVViewer": "csvviewer",
+        "DeepZoomImage": "deepzoomimage",
         "ImageViewer": "imageviewer",
         "Map": "map",
+        "Notepad": "notepad",
         "PDFViewer": "pdfviewer",
+        "Poll": "poll",
         "SageCell": "sagecell",
         "Stickie": "stickie",
+        "Timer": "timer",
         "VideoViewer": "videoviewer",
+        "WebpageLink": "webpagelink",
         "Webview": "webview",
     }
 
