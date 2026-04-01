@@ -8,3 +8,13 @@
 
 from pysage3.client import PySage3
 from pysage3.proxy import SAGEProxy
+from pysage3.utils.sage_communication import SageCommunication, AsyncSageCommunication
+from pysage3.smartbits.smartbit import SmartBit
+
+__all__ = [
+    "PySage3",
+    "SAGEProxy",
+    "SageCommunication",
+    "AsyncSageCommunication",
+    "SmartBit",
+]

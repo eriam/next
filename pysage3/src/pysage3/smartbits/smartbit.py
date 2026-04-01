@@ -209,7 +209,13 @@ class SmartBit(TrackedBaseModel):
     _createdAt: int
     _updatedAt: int
 
-    _s3_comm: ClassVar = SageCommunication(conf, prod_type)
+    _s3_comm: ClassVar[Optional[SageCommunication]] = None
+
+    @classmethod
+    def _get_comm(cls) -> SageCommunication:
+        if cls._s3_comm is None:
+            cls._s3_comm = SageCommunication(conf, prod_type)
+        return cls._s3_comm
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -219,7 +225,7 @@ class SmartBit(TrackedBaseModel):
     def send_updates(self):
         new_data = self.get_all_touched_fields_dict()
         self.touched.clear()
-        self._s3_comm.send_app_update(self.app_id, new_data)
+        self._get_comm().send_app_update(self.app_id, new_data)
 
     def get_updates_for_batch(self):
         new_data = self.get_all_touched_fields_dict()

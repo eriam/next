@@ -11,9 +11,6 @@ from typing import List
 
 import httpx
 import os
-
-# from utils.sage_websocket import SageWebsocket
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -289,3 +286,109 @@ class SageCommunication(Borg):
                 data = [app for app in data if app["data"]["roomId"] == room_id]
 
         return data
+
+
+class AsyncSageCommunication:
+    """Async version of SageCommunication for use in async contexts (FastAPI, Jupyter, etc.)
+
+    Usage:
+        async with AsyncSageCommunication(conf, prod_type) as s3:
+            rooms = await s3.get_rooms()
+            apps = await s3.get_apps(room_id="...")
+    """
+
+    def __init__(self, conf, prod_type):
+        self.conf = conf
+        self.prod_type = prod_type
+        self.__headers = {"Authorization": f"Bearer {os.getenv('TOKEN')}"}
+        self.routes = {
+            "get_rooms": "/api/rooms/",
+            "get_apps": "/api/apps/",
+            "get_boards": "/api/boards/",
+            "send_update": "/api/apps/{}",
+            "delete_app": "/api/apps/{}",
+            "create_app": "/api/apps/",
+            "get_assets": "/api/assets/",
+            "upload_file": "/api/assets/upload",
+            "get_configuration": "/api/configuration",
+        }
+        self._client = httpx.AsyncClient(timeout=None)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self._client.aclose()
+
+    async def get_configuration(self):
+        r = await self._client.get(
+            self.conf[self.prod_type]["web_server"] + self.routes["get_configuration"],
+            headers=self.__headers,
+        )
+        return r.json()
+
+    async def get_rooms(self):
+        r = await self._client.get(
+            self.conf[self.prod_type]["web_server"] + self.routes["get_rooms"],
+            headers=self.__headers,
+        )
+        json_data = r.json()
+        return json_data["data"] if r.is_success else []
+
+    async def get_boards(self, room_id=None):
+        r = await self._client.get(
+            self.conf[self.prod_type]["web_server"] + self.routes["get_boards"],
+            headers=self.__headers,
+        )
+        json_data = r.json()
+        data = json_data["data"] if r.is_success else []
+        if room_id is not None:
+            data = [b for b in data if b["data"]["roomId"] == room_id]
+        return data
+
+    async def get_apps(self, room_id=None, board_id=None, app_id=None):
+        url = self.conf[self.prod_type]["web_server"] + self.routes["get_apps"]
+        if app_id is not None:
+            url += app_id
+        r = await self._client.get(url, headers=self.__headers)
+        json_data = r.json()
+        data = json_data["data"] if r.is_success else []
+        if room_id is not None:
+            data = [a for a in data if a["data"]["roomId"] == room_id]
+        if board_id is not None:
+            data = [a for a in data if a["data"]["boardId"] == board_id]
+        return data
+
+    async def get_assets(self, room_id=None, asset_id=None):
+        url = self.conf[self.prod_type]["web_server"] + self.routes["get_assets"]
+        if asset_id:
+            url += asset_id
+        r = await self._client.get(url, headers=self.__headers)
+        json_data = r.json()
+        data = json_data["data"] if r.is_success else []
+        if room_id is not None:
+            data = [a for a in data if a["data"]["roomId"] == room_id]
+        return data
+
+    async def create_app(self, data):
+        r = await self._client.post(
+            self.conf[self.prod_type]["web_server"] + self.routes["create_app"],
+            headers=self.__headers,
+            json=data,
+        )
+        return r
+
+    async def send_app_update(self, app_id, data):
+        r = await self._client.put(
+            self.conf[self.prod_type]["web_server"] + self.routes["send_update"].format(app_id),
+            headers=self.__headers,
+            json=data,
+        )
+        return r
+
+    async def delete_app(self, app_id):
+        r = await self._client.delete(
+            self.conf[self.prod_type]["web_server"] + self.routes["delete_app"].format(app_id),
+            headers=self.__headers,
+        )
+        return r

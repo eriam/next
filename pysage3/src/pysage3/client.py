@@ -28,7 +28,6 @@ from pysage3.json_templates.templates import create_app_template
 
 # TODO import functions explicitly below
 from pysage3.alignment_strategies import *
-from pydantic import BaseModel, Field
 
 
 class PySage3:
@@ -374,28 +373,6 @@ class PySage3:
             setattr(app.state, k, v)
         app.send_updates()
 
-    # def set_room(self, room_id):
-    #     if room_id in self.rooms:
-    #         self.room = room_id
-    #     else:
-    #         print(f"Room {room_id} not found")
-
-    # def set_board(self, board_id):
-    #     if self.room is None:
-    #         print("Please set current room first")
-    #         return
-    #     room_id = self.room
-    #     if board_id in self.rooms[room_id].boards:
-    #         self.board = board_id
-    #     else:
-    #         print(f"Board {board_id} not found")
-
-    # def get_current_room(self):
-    #     return self.room
-
-    # def get_current_board(self):
-    #     return self.board
-
     def get_app(self, app_id: str = None) -> dict:
         return self.s3_comm.get_app(app_id)
 
@@ -453,18 +430,6 @@ class PySage3:
                 return "Cannot yet summarize {app_type}"
         return text
 
-    # def format_smartbits_with_tags():
-    #     all_tags = get_alltags()
-    #     all_apps = [remove_keys_from_dict(x[1].dict(), keys_to_remove) for x in list(cb.smartbits)]
-    #     for app in all_apps:
-    #         if app['app_id'] in all_tags:
-    #             app['tags'] = all_tags[app['app_id']]['labels']
-    #         else:
-    #             app['tags'] = []
-    #
-    #     all_apps = {x['app_id']: x for x in all_apps}
-    #     return all_apps
-
     def get_smartbits(
         self, room_id: str = None, board_id: str = None, add_tags=False
     ) -> dict:
@@ -479,15 +444,6 @@ class PySage3:
 
         return smartbits
 
-    # def get_smartbits_by_ids(self, app_ids: list, room_id: str = None, board_id: str = None) -> list:
-    #     if room_id is None or board_id is None:
-    #         print("Please provide a room id and a board id")
-    #         return
-    #     if app_ids is None:
-    #         print("Please provide a list of app ids to filter by")
-    #     smartbits = self.get_smartbits(room_id, board_id)
-    #     return [smartbits[app_id] for app_id in app_ids]
-
     def get_smartbits_by_type(
         self, app_type: str, room_id: str = None, board_id: str = None
     ) -> list:
@@ -498,25 +454,6 @@ class PySage3:
             print("Please provide an app type to filter by")
         smartbits = self.get_smartbits(room_id, board_id)
         return [v for k, v in list(smartbits) if v.data.type == app_type]
-
-    # def sort_apps_by_creation_date(self, apps: list = None) -> dict:
-    #     if apps is None:
-    #         apps = self.get_apps()
-    #     apps = sorted(apps, key=lambda x: x['_createdAt'], reverse=False)
-    #     return apps
-
-    # def sort_apps_by_type(self, apps: list = None) -> dict:
-    #     if apps is None:
-    #         apps = self.get_apps()
-    #     apps = sorted(apps, key=lambda x: x['data']['type'], reverse=False)
-    #     return apps
-
-    # def sort_apps_by_size(self, apps: list = None) -> dict:
-    #     if apps is None:
-    #         apps = self.get_apps()
-    #     apps = sorted(apps, key=lambda x: x['data']['size']['width'], reverse=False)
-    #     apps = sorted(apps, key=lambda x: x['data']['size']['height'], reverse=False)
-    #     return apps
 
     def get_types_count(self, apps: list = None) -> dict:
         """
@@ -576,7 +513,3 @@ class PySage3:
                     app_info[1].clean_up()
 
 
-class RoomBoardInputs(BaseModel):
-    """Input for Stock price check."""
-
-    stockticker: str = Field(..., description="Asset")

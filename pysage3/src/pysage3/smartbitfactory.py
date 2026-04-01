@@ -21,18 +21,12 @@ class SmartBitFactory:
     class_names = {
         "Chat": "chat",
         "CodeEditor": "codeeditor",
-        "Counter": "counter",
         "CSVViewer": "csvviewer",
-        "GLTFViewer": "gltfviewer",
-        "IFrame": "iframe",
         "ImageViewer": "imageviewer",
         "Map": "map",
-        # "Notepad": "note",
         "PDFViewer": "pdfviewer",
         "SageCell": "sagecell",
         "Stickie": "stickie",
-        "VegaLite": "vegalite",
-        "VegaLiteViewer": "vegaliteviewer",
         "VideoViewer": "videoviewer",
         "Webview": "webview",
     }

@@ -1,84 +1,162 @@
 # pysage3
 
-Python client library for [SAGE3](https://sage3.app) — a collaborative web-based workspace.
+Python SDK for [SAGE3](https://sage3.sagecommons.org/) — create and control apps on a SAGE3 board programmatically.
 
-Use `pysage3` to programmatically create, read, update, and delete apps on a SAGE3 board from Python scripts, Jupyter notebooks, or AI/ML services.
-
-## Install
+## Installation
 
 ```bash
 pip install pysage3
 ```
 
-Or directly from the repo (development):
+Or from source:
 
 ```bash
-pip install git+https://github.com/SAGE-3/next.git@dev#subdirectory=pysage3
+git clone https://github.com/SAGE-3/next.git
+cd next/pysage3
+pip install -e .
 ```
 
 ## Configuration
 
-Set the following environment variables (or use a `.env` file):
+pysage3 reads connection settings from environment variables:
 
-```
-SAGE3_SERVER=example.com
-ENVIRONMENT=production
-TOKEN=<your SAGE3 JWT token>
+| Variable | Description |
+|---|---|
+| `ENVIRONMENT` | `development`, `production`, or `backend` |
+| `TOKEN` | JWT bearer token from your SAGE3 server |
+| `SAGE3_SERVER` | Hostname of the SAGE3 server (optional, defaults to `localhost`) |
+
+```bash
+export ENVIRONMENT=development
+export SAGE3_SERVER=localhost
+export TOKEN=<your-jwt-token>
 ```
 
 ## Usage
 
-```python
-from pysage3 import PySage3
-from pysage3.config import config as conf, prod_type
+### PySage3 — imperative client API
 
-# Connect to the SAGE3 server
-ps3 = PySage3(conf, prod_type)
-
-# Get all apps on a board as SmartBit objects
-smartbits = ps3.get_smartbits(room_id, board_id)
-
-# Filter by type
-stickies = ps3.get_smartbits_by_type('Stickie', room_id, board_id)
-
-# Update an app's state
-for s in stickies.values():
-    s.state.text = "Updated!"
-    s.send_updates()
-
-# Create a new app
-ps3.create_app(room_id, board_id, 'Stickie', {'text': 'Hello from Python', 'color': 'yellow'})
-```
-
-## SageCell / Jupyter Usage
-
-Inside a SageCell on a SAGE3 board, magic variables are injected automatically:
+Connect, query, and control apps directly:
 
 ```python
 from pysage3 import PySage3
 from pysage3.config import config as conf, prod_type
 
-room_id = %%sage_room_id
-board_id = %%sage_board_id
-selected_apps = %%sage_selected_apps
-
 ps3 = PySage3(conf, prod_type)
-smartbits = ps3.get_smartbits(room_id, board_id)
-bits = [smartbits[a] for a in selected_apps]
-for b in bits:
-    print(b)
+
+# List rooms and boards
+rooms = ps3.s3_comm.get_rooms()
+boards = ps3.s3_comm.get_boards(room_id="<room-id>")
+
+# Get apps on a board
+apps = ps3.get_apps(room_id="<room-id>", board_id="<board-id>")
+
+# Create a Stickie note
+ps3.create_app(
+    room_id="<room-id>",
+    board_id="<board-id>",
+    app_type="Stickie",
+    state={"text": "Hello from pysage3!", "color": "yellow"},
+)
+
+# Move an app
+smartbits = ps3.get_smartbits(room_id="<room-id>", board_id="<board-id>")
+app = smartbits["<app-id>"]
+ps3.update_position(app, x=100, y=200)
+
+# Upload a file
+with open("data.pdf", "rb") as f:
+    ps3.upload_file(room_id="<room-id>", filename="data.pdf", filedata=f)
 ```
 
-## SAGEProxy (server daemon)
+### AsyncSageCommunication — async HTTP client
 
-`SAGEProxy` is a long-running daemon that watches a SAGE3 server for changes and can react to them — for example, executing code when a SageCell's `executeInfo` is triggered.
+For use inside FastAPI, Jupyter, or any async context:
 
-```bash
-python -m pysage3.proxy
+```python
+import asyncio
+from pysage3 import AsyncSageCommunication
+from pysage3.config import config as conf, prod_type
+
+async def main():
+    async with AsyncSageCommunication(conf, prod_type) as s3:
+        rooms = await s3.get_rooms()
+        apps = await s3.get_apps(room_id="<room-id>", board_id="<board-id>")
+        await s3.create_app({"type": "Stickie", ...})
+
+asyncio.run(main())
 ```
 
-See `pysage3/proxy.py` for details on registering linked app callbacks.
+### SAGEProxy — event-driven daemon
 
-## More
+React to real-time changes on a board. Define methods on your SmartBit subclass and the proxy calls them when `executeInfo.executeFunc` is set from the frontend:
 
-See the [SAGE3 docs](https://sage-3.github.io/docs/SAGE3-API-in-SageCell) for full API reference and examples.
+```python
+from pysage3 import SAGEProxy
+from pysage3.config import config as conf, prod_type
+import time
+
+proxy = SAGEProxy(conf, prod_type)
+
+# Keep alive — proxy processes WebSocket messages in background thread
+while True:
+    try:
+        time.sleep(10)
+    except KeyboardInterrupt:
+        proxy.clean_up()
+        break
+```
+
+### SageCommunication — direct HTTP client
+
+Low-level access to the SAGE3 REST API:
+
+```python
+from pysage3 import SageCommunication
+from pysage3.config import config as conf, prod_type
+
+s3 = SageCommunication(conf, prod_type)
+
+rooms = s3.get_rooms()
+apps = s3.get_apps(room_id="<room-id>")
+s3.send_app_update("<app-id>", {"state.text": "updated"})
+s3.delete_app("<app-id>")
+```
+
+## Supported App Types
+
+SmartBit models exist for the following SAGE3 app types:
+
+| App Type | SmartBit class |
+|---|---|
+| `Chat` | `ChatSmartBit` |
+| `CodeEditor` | `CodeEditorSmartBit` |
+| `CSVViewer` | `CSVViewerSmartBit` |
+| `ImageViewer` | `ImageViewerSmartBit` |
+| `Map` | `MapSmartBit` |
+| `PDFViewer` | `PDFViewerSmartBit` |
+| `SageCell` | `SageCellSmartBit` |
+| `Stickie` | `StickieSmartBit` |
+| `VideoViewer` | `VideoViewerSmartBit` |
+| `Webview` | `WebviewSmartBit` |
+
+Unknown app types are handled by `GenericSmartBit`.
+
+## Project Structure
+
+```
+pysage3/
+├── pyproject.toml          # build config, version, dependencies
+├── README.md
+├── scripts/                # helper scripts for running SAGEProxy as a daemon
+└── src/
+    └── pysage3/
+        ├── __init__.py     # public API exports
+        ├── client.py       # PySage3 imperative client
+        ├── proxy.py        # SAGEProxy event-driven daemon
+        ├── board.py        # Board model
+        ├── room.py         # Room model
+        ├── config/         # environment-based server config
+        ├── smartbits/      # Pydantic models for each app type
+        └── utils/          # HTTP client, WebSocket, layout utilities
+```
