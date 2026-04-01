@@ -255,6 +255,8 @@ export function AppWindow(props: WindowProps) {
 
   function handleDragPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!canDrag) return;
+    // Middle mouse should pan the board, not drag the app
+    if (e.button !== 0) return;
     // In lasso mode, shift+click toggles selection — let it through to onClick
     if (primaryActionMode === 'lasso' && e.shiftKey) return;
     e.stopPropagation();
