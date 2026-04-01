@@ -11,7 +11,6 @@ uvicorn
 pydantic>=2.0.0
 
 # AI with langchain
-langchain_huggingface==0.1.0
 langchain-nvidia-ai-endpoints==0.3.3
 langchain_openai
 langchain_experimental
