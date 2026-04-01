@@ -12,6 +12,19 @@ authors = [
 description = "SAGE3 API"
 readme = "README.md"
 requires-python = ">=3.9"
+dependencies = [
+  "httpx",
+  "rectpack",
+  "networkx",
+  "graphviz",
+  "pydantic>=2",
+  "websocket-client",
+  "redis",
+  "requests>=2.32.0",
+  "numpy>=1.22.2",
+  "urllib3>=2.2.2",
+  "ws4py",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["pysage3"]
