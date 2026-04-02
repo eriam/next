@@ -38,7 +38,7 @@
   ],
   "protocol_handlers": [
     {
-      "protocol": "sage3",
+      "protocol": "web+sage3",
       "url": "/%s"
     }
   ]
