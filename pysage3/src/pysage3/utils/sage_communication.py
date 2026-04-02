@@ -7,6 +7,7 @@
 # -----------------------------------------------------------------------------
 
 import uuid
+import time
 from typing import List
 
 import httpx
@@ -54,7 +55,14 @@ class SageCommunication(Borg):
             "get_time": "/api/time",
             "get_configuration": "/api/configuration",
         }
-        self.web_config = self.get_configuration()
+        self.web_config = None
+        while self.web_config is None:
+            try:
+                self.web_config = self.get_configuration()
+                logger.info("Successfully fetched server configuration.")
+            except Exception as e:
+                logger.error(f"Failed to fetch server configuration: {e!r}. Retrying in 20s...")
+                time.sleep(20)
 
     def send_app_update(self, app_id, data):
         """
@@ -173,11 +181,15 @@ class SageCommunication(Borg):
             return asset[0]
 
     def get_configuration(self):
-        r = self.httpx_client.get(
-            self.conf[self.prod_type]["web_server"] + self.routes["get_configuration"],
-            headers=self.__headers,
-        )
-        json_data = r.json()
+        url = self.conf[self.prod_type]["web_server"] + self.routes["get_configuration"]
+        r = self.httpx_client.get(url, headers=self.__headers)
+        logger.debug(f"get_configuration status={r.status_code} url={url}")
+        try:
+            json_data = r.json()
+        except Exception as e:
+            logger.error(f"get_configuration failed to parse response (status={r.status_code}): {e!r}")
+            logger.error(f"get_configuration raw response text: {r.text!r}")
+            raise
         return json_data
 
     def format_public_url(self, asset_id):

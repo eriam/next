@@ -33,6 +33,7 @@ chromadb==0.5.16
 
 #Mesonet
 pandas
+scipy
 
 # Logging
 fluent-logger
