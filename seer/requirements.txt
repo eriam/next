@@ -1,5 +1,6 @@
 # SAGE3
-git+https://github.com/SAGE-3/next.git@dev#subdirectory=pysage3
+#git+https://github.com/SAGE-3/next.git@dev#subdirectory=pysage3
+pysage3
 python-dotenv
 
 # Web API
