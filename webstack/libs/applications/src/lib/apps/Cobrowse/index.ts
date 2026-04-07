@@ -1,5 +1,5 @@
 /**
- * Copyright (c) SAGE3 Development Team 2023. All Rights Reserved
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
  * University of Hawaii, University of Illinois Chicago, Virginia Tech
  *
  * Distributed under the terms of the SAGE3 License.  The full license is in
@@ -16,9 +16,9 @@ import { z } from 'zod';
 export const schema = z.object({
   nonOwnerViewOnly: z.boolean(),
   clipboard: z.string(),
-  lastImage: z.string(),
+  lastImage: z.string().optional(),
+  // Tracks whether the owner has started the VEO container for this session
   init: z.boolean(),
-  urls: z.array(z.string()),
   audio: z.boolean(),
   refreshSeed: z.number(),
 });
@@ -28,9 +28,7 @@ export const init: Partial<state> = {
   nonOwnerViewOnly: false,
   clipboard: '',
   lastImage: undefined,
-  // This is only used for the paste-handler to open in vnc-firefox
   init: false,
-  urls: [],
   audio: true,
   refreshSeed: 0,
 };

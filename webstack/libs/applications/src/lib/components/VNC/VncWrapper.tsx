@@ -1,22 +1,30 @@
-import { useColorMode, Spinner, Box, Image } from '@chakra-ui/react';
-import { App, AppGroup } from '../../schema';
+/**
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
+ * University of Hawaii, University of Illinois Chicago, Virginia Tech
+ *
+ * Distributed under the terms of the SAGE3 License.  The full license is in
+ * the file LICENSE, distributed as part of this software.
+ */
 
-// Styling
+import { useColorMode, Spinner, Box, Image, Text, VStack, Icon } from '@chakra-ui/react';
+import { FaFirefoxBrowser } from 'react-icons/fa';
+import { App } from '../../schema';
+
 import { useEffect, useRef, useState, memo } from 'react';
-import { useAppStore, useUser, useUIStore } from '@sage3/frontend';
+import { useAppStore, useUser } from '@sage3/frontend';
 
 import { VncScreen, RFB } from '../../components/VNC/react-vnc';
-import { ContainerAPI as VmsAPI, VEO_URL_TMP } from '../../components/VNC/API';
+import { ContainerAPI as VmsAPI } from '../../components/VNC/API';
 import { AudioVncService } from '../../components/VNC/AudioVncService';
 
 export interface NoVncProps {
+  veoUrl: string;
   container: string;
   envs: {};
-  //   s: any;
   props: App;
   sAudio: boolean;
   sNonOwnerViewOnly: boolean;
-  sLastImage: string;
+  sLastImage: string | undefined;
   sClipboard: string;
   sInit: boolean;
   sRefreshSeed: number;
@@ -24,9 +32,9 @@ export interface NoVncProps {
 }
 
 const VNCAudioWrapperComponent = ({
+  veoUrl,
   container,
   envs,
-  //   s,
   props,
   sAudio,
   sNonOwnerViewOnly,
@@ -48,36 +56,26 @@ const VNCAudioWrapperComponent = ({
   const { user } = useUser();
   const updateState = useAppStore((state) => state.updateState);
   const vncScreenRef = useRef<React.ElementRef<typeof VncScreen>>(null);
-  const audioRef = useRef(null);
 
-  // If you want to start when user joins room or when user selects app
+  // Defer autostart until first load completes — avoids double-init
   const startVmOnLoad = false;
   const appIsMountingRef = useRef(true);
   const vmId = props._id;
 
-  // Audio Autoplay Service
+  // Gate audio autoplay on a user gesture (browser autoplay policy)
   useEffect(() => {
-    if (audioAutoPlay) return; // Already received gesture, no need to listen
+    if (audioAutoPlay) return;
 
-    const handleUserGesture = () => {
-      setAudioAutoPlay(true);
-    };
-
-    // Listen for various user interaction events
+    const handleUserGesture = () => setAudioAutoPlay(true);
     const events = ['click', 'keydown', 'touchstart', 'mousedown'];
-    events.forEach((event) => {
-      window.addEventListener(event, handleUserGesture, { once: true });
-    });
+    events.forEach((event) => window.addEventListener(event, handleUserGesture, { once: true }));
 
-    // Cleanup listeners if component unmounts before gesture
     return () => {
-      events.forEach((event) => {
-        window.removeEventListener(event, handleUserGesture);
-      });
+      events.forEach((event) => window.removeEventListener(event, handleUserGesture));
     };
   }, [audioAutoPlay]);
 
-  // keyboard grabbing on refresh on vnc load & on app selection
+  // Grab/release keyboard focus when app selection changes
   useEffect(() => {
     if (isSelected) {
       vncScreenRef.current?.focus();
@@ -88,10 +86,11 @@ const VNCAudioWrapperComponent = ({
     }
   }, [isSelected, connected, sNonOwnerViewOnly]);
 
+  // Reconnect to VNC when app is selected but VncScreen has unmounted
   useEffect(() => {
     if (isSelected && vmId && !vncScreenRef.current) {
       setRejoinSpinner(true);
-      VmsAPI.init(vmId, container, envs).then((jsonData) => {
+      VmsAPI.init(veoUrl, vmId, container, envs).then((jsonData) => {
         if ('url' in jsonData) {
           setWsUrl(jsonData['url']);
           setRejoinSpinner(false);
@@ -104,20 +103,19 @@ const VNCAudioWrapperComponent = ({
     }
   }, [isSelected]);
 
-  // Get Websocket URL if vmId exists
+  // Fetch WebSocket URL whenever refreshSeed changes (triggered by owner actions)
   useEffect(() => {
     if (sInit) {
-      // Send request to start container or recieve websocket if running
       if ((startVmOnLoad && appIsMountingRef.current) || !appIsMountingRef.current) {
-        VmsAPI.init(vmId, container, envs).then((jsonData) => {
+        // Start container or retrieve WS URL if already running
+        VmsAPI.init(veoUrl, vmId, container, envs).then((jsonData) => {
           if ('url' in jsonData) {
             setWsUrl(jsonData['url']);
           }
         });
-      }
-      // Send request to check if container is running or not, do not issue start command on first load
-      else if (appIsMountingRef.current) {
-        VmsAPI.check(vmId).then((jsonData) => {
+      } else if (appIsMountingRef.current) {
+        // On first mount: only check if container is already running — don't auto-start
+        VmsAPI.check(veoUrl, vmId).then((jsonData) => {
           if ('url' in jsonData) {
             setWsUrl(jsonData['url']);
           }
@@ -126,7 +124,7 @@ const VNCAudioWrapperComponent = ({
     }
   }, [sRefreshSeed]);
 
-  // Setting View Only Hook
+  // Sync view-only state: owner always has control; non-owners follow the shared flag
   useEffect(() => {
     if (props._createdBy === user?._id) {
       setViewOnly(false);
@@ -135,12 +133,11 @@ const VNCAudioWrapperComponent = ({
     }
   }, [sNonOwnerViewOnly]);
 
-  // Owner Only
-  // First instantiation; auto allocated if check if browser is not instanced
+  // Owner only: start VEO container on first open and mark init in shared state
   useEffect(() => {
     appIsMountingRef.current = false;
     if (!sInit && props._createdBy === user?._id) {
-      VmsAPI.init(vmId, 'firefox-audio', { FIREFOX_THEME: theme }).then((jsonData) => {
+      VmsAPI.init(veoUrl, vmId, 'firefox-audio', { FIREFOX_THEME: theme }).then((_jsonData) => {
         updateState(props._id, {
           refreshSeed: Math.random(),
           init: true,
@@ -150,20 +147,7 @@ const VNCAudioWrapperComponent = ({
     }
   }, []);
 
-  // Paste Interception
-  // Hacky way to get paste to work, but user must be aware the mouse must hover the app
-  // It should be feasible to create a fullscreen (absolute, w:100%, h:100%, index: 99) div to capture the mouse
-  // const handleMouseEnter = async () => {
-  //   try {
-  //     const clipboardData = await navigator.clipboard.readText();
-  //     if (clipboardData) {
-  //       vncScreenRef.current?.clipboardPaste(clipboardData);
-  //     }
-  //   } catch (error) {
-  //     // console.error('Failed to read clipboard:', error);
-  //   }gi
-  // };
-  // Less privacy invasive solution to paste grabbing
+  // Forward toolbar clipboard paste into the VNC session
   useEffect(() => {
     if (sClipboard) {
       vncScreenRef.current?.clipboardPaste(sClipboard);
@@ -178,7 +162,6 @@ const VNCAudioWrapperComponent = ({
             {rejoinSpinner ? (
               <>
                 <Image style={{ filter: 'blur(4px)', width: '100%', height: '100%' }} src={sLastImage} alt="Displayed Image" />
-
                 <Box
                   position="absolute"
                   top="0"
@@ -204,91 +187,59 @@ const VNCAudioWrapperComponent = ({
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
+                  bg="blackAlpha.500"
                 >
-                  Click to start {container}
+                  <VStack spacing={3}>
+                    <Icon as={FaFirefoxBrowser} boxSize={24} color="orange.300" />
+                    <Text fontSize="2xl" fontWeight="bold" color="white" alignItems="center" gap={1}>
+                       Click on this app to start Firefox
+                    </Text>
+                  </VStack>
                 </Box>
               </>
             )}
           </Box>
         ) : (
-          // vmId ? <div>Select App to Start</div> :
-          <Box
-            // w="100%"
-            h="100%"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-          >
-            {/* <CircularProgress isIndeterminate color='orange'/> */}
+          <Box h="100%" display="flex" alignItems="center" justifyContent="center">
             <Spinner thickness="4px" speed="1.5s" emptyColor="gray.200" color="orange" size="xl" />
           </Box>
         ))}
       {wsUrl && (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-          }}
-          // onMouseEnter={handleMouseEnter}
-          // onMouseLeave={handleMouseLeave}
-        >
+        <div style={{ width: '100%', height: '100%' }}>
           <VncScreen
-            url={`${VEO_URL_TMP}${wsUrl}/vnc`}
+            url={`${veoUrl}${wsUrl}/vnc`}
             viewOnly={viewOnly}
             focusOnClick={false}
-            // scaleViewport
             resizeSession
-            qualityLevel={2} //8
-            compressionLevel={8} //2
-            // Dynamically Scaling Quality Level?
-            // qualityLevel={Math.min(Math.max(Math.round((1-((props.data.size.width + 400)/5000)) * 9), 0), 9)}
-            // compressionLevel={Math.min(Math.max(Math.round(((props.data.size.width + 400)/5000) * 9), 0), 9)}
-
+            qualityLevel={2}
+            compressionLevel={8}
             autoConnect={true}
             retryDuration={100}
-            debug={true}
+            debug={false}
             background="#000000"
-            style={{
-              width: '100%',
-              height: '100%',
-            }}
+            style={{ width: '100%', height: '100%' }}
             ref={vncScreenRef}
             screenSizeWidth={props.data.size.width}
             screenSizeHeight={props.data.size.height}
-            // selected={isSelected}
-            // loadingUI={(<>LOADING</>)}
-            onConnect={(rfb: RFB) => {
-              // console.log(rfb);
+            onConnect={(_rfb: RFB) => {
               setVncConnected(true);
-              // updateScreenshot(200);
             }}
-            onDisconnect={(rfb: RFB) => {
-              // console.log(rfb);
-            }}
-            onDesktopName={(e: any) => {
-              // console.log(e);
-            }}
-            onCapabilities={(e: any) => {
-              // console.log(e);
-            }}
+            onDisconnect={(_rfb: RFB) => {}}
+            onDesktopName={(_e: any) => {}}
+            onCapabilities={(_e: any) => {}}
             onClipboard={async (e: any) => {
               try {
-                // console.log(e.detail.selected)
-                // if (e.selected) {
                 await navigator.clipboard.writeText(e.detail.text);
-                // console.log('Text copied to clipboard:', e.detail.text);
-                // }
-              } catch (error) {
-                // console.error('Failed to copy text to clipboard:', error);
+              } catch {
+                // Clipboard write can fail if permission is denied — silently ignore
               }
-              // console.log(e)
             }}
           />
           {audioAutoPlay && sAudio && (
             <AudioVncService
-              // To fix desync, we just reload it on select
+              // Remount on selection change to fix audio desync
               key={`audio-${props._id}-${isSelected ? 'selected' : 'deselected'}`}
-              wsUrl={`${VEO_URL_TMP}${wsUrl}/audio`}
+              wsUrl={`${veoUrl}${wsUrl}/audio`}
               enabled={true}
             />
           )}
@@ -302,6 +253,7 @@ const VNCAudioWrapperComponent = ({
 export const VNCAudioWrapper = memo(VNCAudioWrapperComponent, (prevProps, nextProps) => {
   // Return true if props are equal (skip re-render), false if different (re-render)
   return (
+    prevProps.veoUrl === nextProps.veoUrl &&
     prevProps.container === nextProps.container &&
     prevProps.sAudio === nextProps.sAudio &&
     prevProps.sNonOwnerViewOnly === nextProps.sNonOwnerViewOnly &&
