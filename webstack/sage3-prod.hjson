@@ -108,14 +108,20 @@
     "plugins": true,
     // Which Apps to enable
     "apps": [
+      "AIPane",
       "Chat",
-      "ChartMaker",
-      "Map",
+      "CodeEditor",
+      "CSVViewer",
+      "ImageViewer",
+      "JupyterLab",
       "Notepad",
+      "PDFViewer",
       "Poll",
       "SageCell",
-      "Stickie",
       "Screenshare",
+      "Stickie",
+      "Timer",
+      "TLDraw",
       "Webview"
     ]
   },
@@ -131,7 +137,7 @@
     "strategies": [
       "guest",
       "jwt",
-      "google" // "spectator",      // "cilogon"
+      "ldap"
     ],
     // A List of emails to enable those users to be admins.
     "admins": [],
@@ -144,6 +150,29 @@
     "spectatorConfig": {
       // Endpoint for the spectator login. No need to change this
       "routeEndpoint": "/auth/spectator"
+    },
+    // LDAP / Active Directory configuration
+    "ldapConfig": {
+      // LDAP server URL (use ldaps:// for SSL, port 636)
+      "url": "ldap://ad.yourdomain.com:389",
+      // Service account used to search for users
+      "bindDN": "cn=svc-sage3,ou=service-accounts,dc=yourdomain,dc=com",
+      "bindCredentials": "CHANGEME",
+      // Where to search for users
+      "searchBase": "ou=users,dc=yourdomain,dc=com",
+      // Use sAMAccountName for Active Directory (uid for standard LDAP)
+      "searchFilter": "(sAMAccountName={{username}})",
+      // Map AD group DNs to SAGE3 roles
+      "groupMapping": {
+        "admin": "cn=sage3-admins,ou=groups,dc=yourdomain,dc=com",
+        "user": "cn=sage3-users,ou=groups,dc=yourdomain,dc=com"
+      },
+      // Role assigned when authenticated but no group matches
+      "defaultRole": "user",
+      // TLS options
+      "tlsOptions": {
+        "rejectUnauthorized": false
+      }
     },
     // Google configuration
     "googleConfig": {

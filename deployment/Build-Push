@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#docker login ghcr.io
+docker login
 
 # macOS
 if [[ $OSTYPE == 'darwin'* ]]; then
@@ -8,31 +8,31 @@ if [[ $OSTYPE == 'darwin'* ]]; then
   #security -v unlock-keychain ~/Library/Keychains/login.keychain-db
 
   if [[ `uname -m` == 'arm64' ]]; then
-    docker buildx build --push -f node_server/Dockerfile --platform linux/arm64 --tag ghcr.io/sage-3/next:dev_arm64 ..
-    docker buildx build --push -f node_yjs/Dockerfile   --platform linux/arm64 --tag ghcr.io/sage-3/next_yjs:dev_arm64 ..
-    docker buildx build --push -f node_files/Dockerfile   --platform linux/arm64 --tag ghcr.io/sage-3/next_files:dev_arm64 ..
-    docker buildx build --push -f foresight/Dockerfile   --platform linux/arm64 --tag ghcr.io/sage-3/foresight:dev_arm64 ..
-    docker buildx build --push -f seer/Dockerfile   --platform linux/arm64 --tag ghcr.io/sage-3/agents:dev_arm64 ..
+    docker buildx build --push -f node_server/Dockerfile --platform linux/arm64 --tag eriamschaffter/sage3-next:arm64 ..
+    docker buildx build --push -f node_yjs/Dockerfile   --platform linux/arm64 --tag eriamschaffter/sage3-next_yjs:arm64 ..
+    docker buildx build --push -f node_files/Dockerfile --platform linux/arm64 --tag eriamschaffter/sage3-next_files:arm64 ..
+    docker buildx build --push -f foresight/Dockerfile  --platform linux/arm64 --tag eriamschaffter/sage3-kernelserver:arm64 ..
+    docker buildx build --push -f seer/Dockerfile       --platform linux/arm64 --tag eriamschaffter/sage3-agents:arm64 ..
   fi
 
   # Intel
   if [[ `uname -m` == 'x86_64' ]]; then
-    docker buildx build --push -f node_server/Dockerfile --platform linux/amd64 --tag ghcr.io/sage-3/next:dev_amd64 ..
-    docker buildx build --push -f node_yjs/Dockerfile   --platform linux/amd64 --tag ghcr.io/sage-3/next_yjs:dev_amd64 ..
-    docker buildx build --push -f node_files/Dockerfile   --platform linux/arm64 --tag ghcr.io/sage-3/next_files:dev_amd64 ..
-    docker buildx build --push -f foresight/Dockerfile   --platform linux/amd64 --tag ghcr.io/sage-3/foresight:dev_amd64 ..
-    docker buildx build --push -f seer/Dockerfile   --platform linux/amd64 --tag ghcr.io/sage-3/agents:dev_amd64 ..
+    docker buildx build --push -f node_server/Dockerfile --platform linux/amd64 --tag eriamschaffter/sage3-next:amd64 ..
+    docker buildx build --push -f node_yjs/Dockerfile   --platform linux/amd64 --tag eriamschaffter/sage3-next_yjs:amd64 ..
+    docker buildx build --push -f node_files/Dockerfile --platform linux/amd64 --tag eriamschaffter/sage3-next_files:amd64 ..
+    docker buildx build --push -f foresight/Dockerfile  --platform linux/amd64 --tag eriamschaffter/sage3-kernelserver:amd64 ..
+    docker buildx build --push -f seer/Dockerfile       --platform linux/amd64 --tag eriamschaffter/sage3-agents:amd64 ..
   fi
 
 fi
 
 # linux
 if [[ $OSTYPE == 'linux'* ]]; then
-  docker buildx build --push -f node_server/Dockerfile --platform linux/amd64 --tag ghcr.io/sage-3/next:dev_amd64 ..
-  docker buildx build --push -f node_yjs/Dockerfile   --platform linux/amd64 --tag ghcr.io/sage-3/next_yjs:dev_amd64 ..
-  docker buildx build --push -f node_files/Dockerfile   --platform linux/arm64 --tag ghcr.io/sage-3/next_files:dev_amd64 ..
-  docker buildx build --push -f foresight/Dockerfile   --platform linux/amd64 --tag ghcr.io/sage-3/foresight:dev_amd64 ..
-  docker buildx build --push -f seer/Dockerfile   --platform linux/amd64 --tag ghcr.io/sage-3/agents:dev_amd64 ..
+  docker buildx build --push -f node_server/Dockerfile --platform linux/amd64 --tag eriamschaffter/sage3-next:amd64 ..
+  docker buildx build --push -f node_yjs/Dockerfile   --platform linux/amd64 --tag eriamschaffter/sage3-next_yjs:amd64 ..
+  docker buildx build --push -f node_files/Dockerfile --platform linux/amd64 --tag eriamschaffter/sage3-next_files:amd64 ..
+  docker buildx build --push -f foresight/Dockerfile  --platform linux/amd64 --tag eriamschaffter/sage3-kernelserver:amd64 ..
+  docker buildx build --push -f seer/Dockerfile       --platform linux/amd64 --tag eriamschaffter/sage3-agents:amd64 ..
 fi
 
 

@@ -237,6 +237,20 @@ export class SBAuth {
       // LDAP Auth Setup
       if (config.strategies.includes('ldap') && config.ldapConfig) {
         passportLDAPSetup(config.ldapConfig);
+        // Register a dedicated /auth/ldap route when local is not enabled
+        if (!config.strategies.includes('local')) {
+          express.post('/auth/ldap', (req: Request, res: Response, next: NextFunction) => {
+            passport.authenticate('ldapauth', (err: any, user: any) => {
+              if (err || !user) {
+                return res.redirect('/?error=ldap_failed');
+              }
+              req.logIn(user, (loginErr: any) => {
+                if (loginErr) return next(loginErr);
+                return res.redirect('/');
+              });
+            })(req, res, next);
+          });
+        }
       }
 
       // Local Auth Setup (with optional LDAP chaining)
