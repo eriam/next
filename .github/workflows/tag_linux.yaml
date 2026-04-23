@@ -25,9 +25,9 @@ jobs:
         with:
           node-version: "22"
       - name: Install
-        run: yarn install --frozen-lockfile --silent
+        run: npm install --legacy-peer-deps
       - name: Build
-        run: npx electron-packager ./ --platform=linux --arch=x64 --icon=s3.icns --overwrite --appCopyright="SAGE3 Team"
+        run: npx electron-packager ./ --platform=linux --arch=x64 --icon=s3.icns --overwrite --appCopyright="SAGE3 Team" --ignore="^/node_modules/electron-installer" --ignore="^/node_modules/electron-winstaller"
       - name: Chmod
         run: chmod +x SAGE3-linux-x64/SAGE3
       - name: Readme
