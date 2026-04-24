@@ -165,8 +165,10 @@ export class SBAuth {
     express.use(this._sessionParser);
 
     // Initialize passport
-    express.use(passport.initialize());
-    express.use(passport.session());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    express.use(passport.initialize() as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    express.use(passport.session() as any);
 
     // Passport serialize function in order to support login sessions.
     passport.serializeUser(this.serializeUser);

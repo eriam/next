@@ -336,29 +336,6 @@ export function LoginPage() {
     form.submit();
   };
 
-  const [ldapUsername, setLdapUsername] = useState('');
-  const [ldapPassword, setLdapPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [ldapLoading, setLdapLoading] = useState(false);
-
-  const handleLdapLogin = async () => {
-    if (!ldapUsername || !ldapPassword) return;
-    setLdapLoading(true);
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/auth/ldap';
-    const u = document.createElement('input');
-    u.name = 'username';
-    u.value = ldapUsername;
-    const p = document.createElement('input');
-    p.name = 'password';
-    p.value = ldapPassword;
-    form.appendChild(u);
-    form.appendChild(p);
-    document.body.appendChild(form);
-    form.submit();
-  };
-
   const { colorMode } = useColorMode();
 
   const isGoogle = !shouldDisable && logins.includes('google');
