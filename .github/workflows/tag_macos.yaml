@@ -3,7 +3,7 @@ name: Tag release macos-x64
 on:
   push:
     branches:
-      - dev
+      - main
     tags:
       - "*"
 

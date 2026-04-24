@@ -3,7 +3,7 @@ name: Tag release macos-arm
 on:
   push:
     branches:
-      - dev
+      - main
     tags:
       - "*"
 
