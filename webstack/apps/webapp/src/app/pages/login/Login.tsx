@@ -8,11 +8,15 @@
 
 import { useEffect, useCallback, useState } from 'react';
 
-import { Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack, useColorModeValue, useToast } from '@chakra-ui/react';
+import {
+  Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack, useToast,
+  Input, FormControl, FormLabel, InputGroup, InputRightElement,
+} from '@chakra-ui/react';
 
 import { FcGoogle } from 'react-icons/fc';
-import { FaGhost, FaApple } from 'react-icons/fa';
+import { FaGhost, FaApple, FaLock } from 'react-icons/fa';
 import { SiKeycloak } from 'react-icons/si';
+import { MdLogin } from 'react-icons/md';
 
 import { isElectron, useAuth, useRouteNav, GetServerInfo } from '@sage3/frontend';
 
@@ -23,10 +27,9 @@ import cilogonLogo from '../../../assets/cilogon.png';
  * Login page with authentication options and board context handling
  */
 export function LoginPage() {
-  const { auth, googleLogin, appleLogin, ciLogin, keycloakLogin, guestLogin, spectatorLogin, loading: authLoading } = useAuth();
+  const { auth, googleLogin, appleLogin, ciLogin, keycloakLogin, guestLogin, spectatorLogin, localLogin, loading: authLoading } = useAuth();
   const { toCreateUser } = useRouteNav();
   const toast = useToast();
-
   const [serverName, setServerName] = useState<string>('');
   const [shouldDisable, setShouldDisable] = useState(false);
   const [logins, setLogins] = useState<string[]>([]);
@@ -310,6 +313,52 @@ export function LoginPage() {
     authNavCheck();
   }, [authNavCheck]);
 
+  const [ldapUsername, setLdapUsername] = useState('');
+  const [ldapPassword, setLdapPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [ldapLoading, setLdapLoading] = useState(false);
+
+  const handleLdapLogin = async () => {
+    if (!ldapUsername || !ldapPassword) return;
+    setLdapLoading(true);
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/auth/ldap';
+    const u = document.createElement('input');
+    u.name = 'username';
+    u.value = ldapUsername;
+    const p = document.createElement('input');
+    p.name = 'password';
+    p.value = ldapPassword;
+    form.appendChild(u);
+    form.appendChild(p);
+    document.body.appendChild(form);
+    form.submit();
+  };
+
+  const [ldapUsername, setLdapUsername] = useState('');
+  const [ldapPassword, setLdapPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [ldapLoading, setLdapLoading] = useState(false);
+
+  const handleLdapLogin = async () => {
+    if (!ldapUsername || !ldapPassword) return;
+    setLdapLoading(true);
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/auth/ldap';
+    const u = document.createElement('input');
+    u.name = 'username';
+    u.value = ldapUsername;
+    const p = document.createElement('input');
+    p.name = 'password';
+    p.value = ldapPassword;
+    form.appendChild(u);
+    form.appendChild(p);
+    document.body.appendChild(form);
+    form.submit();
+  };
+
   const { colorMode } = useColorMode();
 
   const isGoogle = !shouldDisable && logins.includes('google');
@@ -436,20 +485,81 @@ export function LoginPage() {
             </ButtonGroup>
           )}
 
+          {/* LDAP / Active Directory Login */}
+          {logins.includes('ldap') && (
+            <VStack spacing={2} width="100%">
+              <FormControl>
+                <FormLabel fontSize="sm">Username</FormLabel>
+                <InputGroup>
+                  <Input
+                    placeholder="username"
+                    value={ldapUsername}
+                    onChange={(e) => setLdapUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLdapLogin()}
+                    autoComplete="username"
+                  />
+                </InputGroup>
+              </FormControl>
+              <FormControl>
+                <FormLabel fontSize="sm">Password</FormLabel>
+                <InputGroup>
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="password"
+                    value={ldapPassword}
+                    onChange={(e) => setLdapPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLdapLogin()}
+                    autoComplete="current-password"
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      aria-label="Show password"
+                      icon={<FaLock />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowPassword(!showPassword)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+              </FormControl>
+              <ButtonGroup isAttached size="lg" width="100%">
+                <IconButton
+                  width="80px"
+                  aria-label="Login with AD"
+                  icon={<MdLogin size="26" />}
+                  pointerEvents="none"
+                  borderRight={`3px solid`}
+                  borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+                />
+                <Button
+                  width="100%"
+                  justifyContent="left"
+                  isLoading={ldapLoading}
+                  isDisabled={shouldDisable || !ldapUsername || !ldapPassword}
+                  onClick={handleLdapLogin}
+                >
+                  Login with AD
+                </Button>
+              </ButtonGroup>
+            </VStack>
+          )}
+
           {/* Guest Auth Service */}
-          <ButtonGroup isAttached size="lg" width="100%">
-            <IconButton
-              width="80px"
-              aria-label="Login with Guest"
-              icon={<FaGhost size="30" width="50px" />}
-              pointerEvents="none"
-              borderRight={`3px solid`}
-              borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
-            />
-            <Button width="100%" isDisabled={shouldDisable || !logins.includes('guest')} justifyContent="left" onClick={guestLogin}>
-              Login as Guest
-            </Button>
-          </ButtonGroup>
+          {logins.includes('guest') && (
+            <ButtonGroup isAttached size="lg" width="100%">
+              <IconButton
+                width="80px"
+                aria-label="Login with Guest"
+                icon={<FaGhost size="30" width="50px" />}
+                pointerEvents="none"
+                borderRight={`3px solid`}
+                borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+              />
+              <Button width="100%" isDisabled={shouldDisable} justifyContent="left" onClick={guestLogin}>
+                Login as Guest
+              </Button>
+            </ButtonGroup>
+          )}
         </VStack>
       </Box>
     </Box>

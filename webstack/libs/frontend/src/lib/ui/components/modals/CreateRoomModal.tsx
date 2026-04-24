@@ -123,7 +123,7 @@ export function CreateRoomModal(props: CreateRoomModalProps): JSX.Element {
         });
       } else {
         // hash the PIN: the namespace comes from the server configuration
-        const key = uuidv5(password, config.namespace);
+        const key = uuidv5(user._id, config.namespace);
         const room = await createRoom({
           name: cleanedName,
           description: description || '',

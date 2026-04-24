@@ -128,7 +128,7 @@ export function CreateBoardModal(props: CreateBoardModalProps): JSX.Element {
         });
       } else {
         // hash the PIN: the namespace comes from the server configuration
-        const key = uuidv5(password, config.namespace);
+        const key = uuidv5(user._id, config.namespace);
         // set the pending state to true so that the button is disabled
         setPendingCreate(true);
         // Create the board

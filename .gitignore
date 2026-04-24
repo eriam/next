@@ -16,8 +16,6 @@ webstack/assets/*
 .vscode/*
 
 
-deployment/.env
-
 # Mac System Files
 .DS_Store
 Thumbs.db
@@ -39,3 +37,16 @@ webstack/keys/package-lock.json
 webstack/keys/yarn.lock
 foresight/_env.sh
 sage_seer/_env.sh
+.aider*
+webstack/clients/electron/SAGE3-linux-x64/
+webstack/clients/electron/SAGE3-linux-x64.tar.gz
+# Deployment artifacts (keep scripts/configs, ignore generated files)
+deployment/configurations/node/keys/*.crt
+deployment/configurations/node/keys/*.key
+deployment/configurations/node/keys/*.pem
+deployment/configurations/node/keys/node_modules/
+deployment/configurations/node/keys/token.json
+deployment/configurations/chroma/data/*.sqlite3
+deployment/configurations/redis/data/
+deployment/exported_bundle/
+deployment/.env

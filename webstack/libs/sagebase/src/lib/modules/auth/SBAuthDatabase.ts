@@ -11,6 +11,7 @@ import { v4 } from 'uuid';
 
 // The Auth Schema
 export type SBAuthSchema = {
+  password: string;
   provider: string;
   providerId: string;
   id: string;
@@ -201,6 +202,21 @@ class SBAuthDatabase {
   private ERRORLOG(error: unknown) {
     console.log('SAGEBase SBAuthDatabase ERROR: ', error);
   }
+
+  /*
+  async getUserByUsername(username: string): Promise<SBAuthSchema> {
+    // Return a default user with the provided username
+    return {
+      provider: 'local',
+      providerId: username,
+      id: 'default-id',
+      displayName: username,
+      email: `${username}@example.com`,
+      picture: 'default-picture-url',
+    };
+  }
+
+   */
 }
 
 export type { SBAuthDatabase };

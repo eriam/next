@@ -41,7 +41,7 @@ services:
       restart_policy:
         condition: on-failure
   node-server:
-    image: "ghcr.io/sage-3/next:amd64"
+    image: "eriamschaffter/sage3-next:amd64"
     depends_on:
       - "redis-server"
       - "fluentd-server"
@@ -76,7 +76,7 @@ services:
       options:
         max-size: "100m"
   yjs-server:
-    image: "ghcr.io/sage-3/next_yjs:amd64"
+    image: "eriamschaffter/sage3-next_yjs:amd64"
     depends_on:
       - "redis-server"
     labels:
@@ -107,7 +107,7 @@ services:
       options:
         max-size: "100m"
   files-server:
-    image: "ghcr.io/sage-3/next_files:amd64"
+    image: "eriamschaffter/sage3-next_files:amd64"
     depends_on:
       - "redis-server"
     labels:
@@ -148,7 +148,7 @@ services:
       options:
         max-size: "100m"
   kernelserver:
-    image: "ghcr.io/sage-3/sagekernelserver:amd64"
+    image: "eriamschaffter/sage3-kernelserver:amd64"
     ports:
       - "127.0.0.1:8000:8000"
     environment:
@@ -173,7 +173,7 @@ services:
       restart_policy:
         condition: on-failure
   seer:
-    image: "ghcr.io/sage-3/agents:amd64"
+    image: "eriamschaffter/sage3-agents:amd64"
     ports:
       - "127.0.0.1:9999:9999"
     environment:

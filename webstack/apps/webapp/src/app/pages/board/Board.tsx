@@ -222,31 +222,32 @@ export function BoardPage() {
       toast.closeAll();
 
       // Show a notification
-      toast({
-        title: 'Reduced Functionality in Browser Version',
-        status: 'warning',
-        duration: null, // never close automatically
-        isClosable: true,
-        position: 'bottom',
-        description: (
-          <div>
-            <p>
-              Using SAGE3 on a web browser will __not__ support several key features that are only available on the SAGE3 application.
-              Download the SAGE3 application at{' '}
-              <a target="_blank" style={{ textDecoration: 'underline' }} href="https://sage3.sagecommons.org/?page_id=358">
-                sage3.sagecommons.org
-              </a>
-              .
-            </p>
-            <p style={{ marginTop: '8px' }}>
-              Would you like to open this board in the SAGE3 application (if you have it installed)?
-              <Button ml="2" size="xs" colorScheme={'green'} onClick={openDesktopApp}>
-                OK
-              </Button>
-            </p>
-          </div>
-        ),
-      });
+      // toast({
+      //   title: 'Reduced Functionality in Browser Version',
+      //   status: 'warning',
+      //   duration: null, // never close automatically
+      //   isClosable: true,
+      //   position: 'bottom',
+      //   description: (
+      //     <div>
+      //       <p>
+      //         Using SAGE3 on a web browser will __not__ support several key features that are only available on the SAGE3 application.
+      //         Download the SAGE3 application at{' '}
+      //         <a target="_blank" style={{ textDecoration: 'underline' }} href="https://sage3.sagecommons.org/?page_id=358">
+      //           sage3.sagecommons.org
+      //         </a>
+      //         .
+      //       </p>
+      //       <p style={{ marginTop: '8px' }}>
+      //         Would you like to open this board in the SAGE3 application (if you have it installed)?
+      //         <Button ml="2" size="xs" colorScheme={'green'} onClick={openDesktopApp}>
+      //           OK
+      //         </Button>
+      //       </p>
+      //     </div>
+      //   ),
+      // });
+
     }
 
     // Unmounting of the board page. user must have redirected back to the homepage. Unsubscribe from the board.

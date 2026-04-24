@@ -1,0 +1,7 @@
+fastapi
+websockets
+jupyter_client
+uvicorn
+requests
+python-dotenv
+sse-starlette

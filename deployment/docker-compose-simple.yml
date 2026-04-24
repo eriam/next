@@ -1,0 +1,118 @@
+services:
+  redis-server:
+    image: "redis/redis-stack-server:latest"
+    volumes:
+      - ./configurations/redis/data:/data
+      - ./configurations/redis/conf:/conf
+    ports:
+      - "127.0.0.1:6379:6379"
+    entrypoint: redis-server
+    command: /conf/redis.conf
+    deploy:
+      restart_policy:
+        condition: on-failure
+  chromadb:
+    image: "chromadb/chroma:0.5.16"
+    ports:
+      - "127.0.0.1:8100:8000"
+    volumes:
+      - ./configurations/chroma/data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.basic_authn.BasicAuthenticationServerProvider
+      - CHROMA_SERVER_AUTHN_CREDENTIALS=${CHROMA_SERVER_AUTHN_CREDENTIALS}
+    command: "--workers 1 --proxy-headers --port 8000 --host 0.0.0.0 --timeout-keep-alive 30"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      restart_policy:
+        condition: on-failure
+  node-server:
+    image: "eriamschaffter/next:dev_amd64"
+    ports:
+      - "443:443"
+    depends_on:
+      - "redis-server"
+      - "fluentd-server"
+    volumes:
+      - ./configurations/node/keys:/app/keys
+      - ./configurations/node/assets:/app/dist/apps/homebase/assets
+      - ./configurations/node/plugins:/app/dist/apps/homebase/plugins
+      - ./configurations/node/sage3-prod.hjson:/app/sage3-prod.hjson
+    deploy:
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -f https://127.0.0.1:443 || exit 1"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+  fluentd-server:
+    image: "fluent/fluentd:edge-debian"
+    ports:
+      - "127.0.0.1:24224:24224"
+    volumes:
+      - ./configurations/fluentd/log:/fluentd/log
+      - ./configurations/fluentd/conf:/fluentd/etc
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+  kernelserver:
+    image: "eriamschaffter/sagekernelserver:dev_amd64"
+    ports:
+      - "10.0.0.40:8001:8001"
+    environment:
+      - ENVIRONMENT=production
+      - SAGE3_SERVER=${SAGE3_SERVER}
+      - TOKEN=${TOKEN}
+    restart: always
+    working_dir: /app
+    command: python src/main.py --url http://jupyter:8888
+    depends_on:
+      node-server:
+        condition: service_healthy
+      jupyter:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/heartbeat"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      restart_policy:
+        condition: on-failure
+  jupyter:
+    image: "eriamschaffter/jupyter:dev_amd64"
+    volumes:
+      - ./configurations/jupyter/conf:/conf
+      - ./configurations/jupyter/notebooks:/home/jovyan/notebooks
+      - ./redis-client:/home/jovyan/work
+    ports:
+      - "127.0.0.1:8888:8888"
+    environment:
+      - ENVIRONMENT=production
+      - SAGE3_SERVER=${SAGE3_SERVER}
+      - TOKEN=${TOKEN}
+    depends_on:
+      - "redis-server"
+    command: /conf/start.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 30s
+    deploy:
+      restart_policy:
+        condition: on-failure

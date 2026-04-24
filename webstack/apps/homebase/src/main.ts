@@ -196,12 +196,13 @@ async function startServer() {
         // extract the token from the header
         token = token.split(' ')[1];
         // Read the public key
+            console.log(token);
         const keyFile = config.auth.jwtConfig?.publicKey || 'jwt_public.pem';
         const pubkey = fs.readFileSync(keyFile);
         // Check is token valid
         jwt.verify(token, pubkey, { algorithms: ['RS256'] }, async (err, decoded) => {
           if (err) {
-            console.log('not authorized');
+            console.log('not authorized !!!!!!');
             socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
             socket.destroy();
             return;

@@ -40,18 +40,22 @@ export function ApplicationsMenu(props: ApplicationProps) {
   useEffect(() => {
     const updateAppList = async () => {
       const data = await GetConfiguration();
-
+/*
       // If developer show all apps
       if (development) {
         const apps = Object.keys(Applications).sort((a, b) => a.localeCompare(b));
         setAppsList(apps);
         // If Production show only the apps in the config file. config.features.apps
       } else if (!development && data) {
-        const apps = data.features.apps.sort((a, b) => a.localeCompare(b));
-        setAppsList(apps);
+        */
+      const apps = data.features.apps.sort((a, b) => a.localeCompare(b));
+      setAppsList(apps);
+        /*
       } else {
         setAppsList([]);
       }
+
+         */
     };
     updateAppList();
   }, []);
