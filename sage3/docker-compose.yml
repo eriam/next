@@ -1,0 +1,139 @@
+services:
+  redis-server:
+    image: "redis/redis-stack-server:7.4.0-v3"
+    volumes:
+      - ./configurations/redis/data:/data
+      - ./configurations/redis/conf:/conf
+    ports:
+      - "127.0.0.1:6379:6379"
+    entrypoint: redis-server
+    command: /conf/redis.conf
+    deploy:
+      restart_policy:
+        condition: on-failure
+  chromadb:
+    image: "chromadb/chroma:0.6.3"
+    ports:
+      - "127.0.0.1:8100:8000"
+    volumes:
+      - ./configurations/chroma/data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.basic_authn.BasicAuthenticationServerProvider
+      - CHROMA_SERVER_AUTHN_CREDENTIALS=${CHROMA_SERVER_AUTHN_CREDENTIALS}
+    command: "--workers 1 --proxy-headers --port 8000 --host 0.0.0.0 --timeout-keep-alive 30"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      restart_policy:
+        condition: on-failure
+  nginx:
+    image: "nginx:alpine"
+    ports:
+      - "443:443"
+    depends_on:
+      node-server:
+        condition: service_healthy
+    volumes:
+      - ./configurations/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./configurations/node/keys:/etc/nginx/certs:ro
+    deploy:
+      restart_policy:
+        condition: on-failure
+  node-server:
+    image: "eriamschaffter/sage3-next:amd64"
+    depends_on:
+      - "redis-server"
+      - "fluentd-server"
+    volumes:
+      - ./configurations/node/keys:/app/keys
+      - ./configurations/node/assets:/app/dist/apps/homebase/assets
+      - ./configurations/node/plugins:/app/dist/apps/homebase/plugins
+      - ./configurations/node/sage3-prod.hjson:/app/sage3-prod.hjson
+    deploy:
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:443 || exit 1"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+  fluentd-server:
+    image: "fluentd:v1.16-debian-1"
+    ports:
+      - "127.0.0.1:24224:24224"
+    volumes:
+      - ./configurations/fluentd/log:/fluentd/log
+      - ./configurations/fluentd/conf:/fluentd/etc
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+  yjs-server:
+    image: "eriamschaffter/sage3-next_yjs:amd64"
+    depends_on:
+      - "redis-server"
+    volumes:
+      - ./configurations/node/sage3-prod.hjson:/app/sage3-prod.hjson
+    deploy:
+      restart_policy:
+        condition: on-failure
+  files-server:
+    image: "eriamschaffter/sage3-next_files:amd64"
+    depends_on:
+      - "redis-server"
+    volumes:
+      - ./configurations/node/sage3-prod.hjson:/app/sage3-prod.hjson
+      - ./configurations/node/keys:/app/keys
+      - ./configurations/node/assets:/app/dist/apps/homebase/assets
+    deploy:
+      restart_policy:
+        condition: on-failure
+  jupyter-server:
+    image: "jupyter/minimal-notebook:latest"
+    environment:
+      - JUPYTER_TOKEN=sage3kerneltoken
+    command: ["jupyter", "server", "--ServerApp.allow_origin=*", "--ServerApp.ip=0.0.0.0"]
+    deploy:
+      restart_policy:
+        condition: on-failure
+  kernel-server:
+    image: "sage3/fastapi:latest"
+    depends_on:
+      - "jupyter-server"
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      - STREAM_DELAY=0.1
+      - MAX_NUMBER_KERNELS=20
+      - RETRY_TIMEOUT=15000
+      - JUPYTER_HUB_TYPE=LOCAL
+      - JUPYTER_TOKEN=sage3kerneltoken
+    entrypoint: ["python3", "/app/src/main.py", "--url", "http://jupyter-server:8888/"]
+    working_dir: /app/src
+    deploy:
+      restart_policy:
+        condition: on-failure
+  agents:
+    image: "eriamschaffter/sage3-agents:amd64"
+    depends_on:
+      node-server:
+        condition: service_healthy
+    environment:
+      - ENVIRONMENT=production
+      - SAGE3_SERVER=node-server
+      - TOKEN=${TOKEN}
+    volumes:
+      - ./configurations/agents/foresight_config_init.py:/usr/local/lib/python3.13/site-packages/foresight/config/__init__.py:ro
+    deploy:
+      restart_policy:
+        condition: on-failure

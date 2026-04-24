@@ -1,0 +1,17 @@
+  // LDAP/Active Directory Configuration
+  // Add this block inside the "auth" section of sage3-prod.hjson
+  // The "local" strategy must be in the strategies array for the login form to appear.
+  //
+  // strategies: ["local", "guest", "spectator", "jwt"]
+  //
+  "ldapConfig": {
+    // AD server URL
+    "url": "ldap://al-ad-01.sioal.local:389",
+    // Service account for LDAP bind (read-only is sufficient)
+    "bindDN": "CN=sage3-ldap,CN=Users,DC=sioal,DC=local",
+    "bindCredentials": "CHANGE_ME",
+    // Where to search for users
+    "searchBase": "DC=sioal,DC=local",
+    // Match by sAMAccountName (Windows username)
+    "searchFilter": "(sAMAccountName={{username}})"
+  }

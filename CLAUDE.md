@@ -97,3 +97,24 @@ Passport.js with 5 strategies: guest, local, JWT (RS256), Google OAuth, CILogon.
 **Python:** FastAPI, LangChain, Celery, Jupyter, ChromaDB
 
 **Build:** Nx 14, Webpack, Jest, ESLint/Prettier
+
+## Deployment — BTS SIO Infrastructure
+
+Shell toolkit for bootstrapping and administering remote Debian servers for a BTS SIO infrastructure.
+
+- **`inventory.conf`** -- Server inventory mapping names to IPs. Add new servers here.
+- **`setup-user.sh`** -- Bootstraps user `eriam` on a fresh server (creates account, sets SSH key, grants sudo). Run as root via `ssh root@server 'bash -s' < setup-user.sh`.
+- **`claude-admin.sh`** -- Ansible-like wrapper that launches Claude Code with a system prompt for remote server administration via SSH. Connects as `eriam` (with sudo) to the target server. Accepts server name from inventory or raw IP. Usage: `./claude-admin.sh <server-name|server-ip> [task description]`.
+
+## Key Conventions
+
+- Target OS is Debian; all remote commands assume Debian package management and conventions.
+- Remote user is always `eriam` with sudo access.
+- Scripts use `set -euo pipefail` (strict mode).
+- The admin script's system prompt is in French; follow that language when interacting through it.
+- Idempotency is a core principle: check state before making changes, never break what already works.
+- All remote execution goes through `ssh eriam@<server>` (with `sudo` when root is needed).
+
+## Permissions
+
+The local `.claude/settings.local.json` pre-allows `ssh`, `scp`, `chmod +x`, and `cat` bash commands so Claude Code can operate without constant approval prompts during server administration sessions.
