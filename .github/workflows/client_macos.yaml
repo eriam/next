@@ -6,7 +6,7 @@ on:
       - "webstack/clients/electron/**"
       - ".github/workflows/**"
     branches:
-      - dev
+      - main
 
 env:
   SERVER: production
