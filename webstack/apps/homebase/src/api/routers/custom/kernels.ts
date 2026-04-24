@@ -8,7 +8,7 @@
 
 import { ClientRequest } from 'http';
 import { Request } from 'express';
-import { createProxyMiddleware, legacyCreateProxyMiddleware } from 'http-proxy-middleware';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 import { config } from '../../../config';
 
@@ -19,10 +19,10 @@ const logger = {
     return; // Disable info logging for proxy
   },
   warn: (...args: any[]) => {
-    console.warn('[PROXY][WARN]', ...args);
+    console.warn('[Kernels Proxy][WARN]', ...args);
   },
   error: (...args: any[]) => {
-    console.error('[PROXY][ERROR]', ...args);
+    console.error('[Kernels Proxy][ERROR]', ...args);
   },
 };
 
@@ -36,8 +36,6 @@ export function KernelsRouter() {
     target: config.kernels.url,
     changeOrigin: true,
     pathRewrite: { '^/api/kernels': '' },
-    // logLevel: 'warn', // 'debug' | 'info' | 'warn' | 'error' | 'silent'
-    // logProvider: () => console,
     logger: logger,
     selfHandleResponse: true, // Add this to handle the response manually
     // request handler making sure the body is parsed before proxying
