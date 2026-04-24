@@ -243,8 +243,8 @@ export function EditUserSettingsModal(props: EditUserSettingsModalProps): JSX.El
                         <Radio value="openai" isDisabled={!openai?.apiKey}>
                           <b>{openai?.label || 'OpenAI'}</b>: {openai?.model}
                         </Radio>
-                        <Radio value="azure" isDisabled={!azure?.text.apiKey}>
-                          <b>{azure?.text.label || 'Azure'}</b>: {azure?.text.model}
+                        <Radio value="azure" isDisabled={!azure?.text?.apiKey}>
+                          <b>{azure?.text?.label || 'Azure'}</b>: {azure?.text?.model}
                         </Radio>
                       </Stack>
                     </RadioGroup>

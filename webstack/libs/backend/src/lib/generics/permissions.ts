@@ -28,6 +28,7 @@ const providerToRoleMap = {
   google: 'user',
   apple: 'user',
   jwt: 'user',
+  ldap: 'user',
   spectator: 'spectator',
   guest: 'guest',
   local: 'local',
