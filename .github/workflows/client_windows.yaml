@@ -28,7 +28,7 @@ jobs:
 
       # Install SAGE3 node dependencies
       - name: Installing SAGE3 Dependencies
-        run: yarn install --frozen-lockfile --silent
+        run: yarn install --network-timeout 600000 --silent
         shell: bash
         working-directory: webstack/clients/electron
 

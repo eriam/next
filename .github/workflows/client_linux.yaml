@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: "24"
       - name: Install
-        run: yarn install --frozen-lockfile --silent
+        run: yarn install --network-timeout 600000 --silent
       - name: Build
         run: npx electron-packager ./ --platform=linux --arch=x64 --icon=s3.icns --overwrite --appCopyright="SAGE3 Team"
       - name: Chmod
