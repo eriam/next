@@ -37,7 +37,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: eriamschaffter/sage3-next:amd64
+          tags: eriamschaffter/sage3-next:dev
 
       - name: Build and push Docker image for node_yjs
         uses: docker/build-push-action@v6
@@ -46,7 +46,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: eriamschaffter/sage3-next_yjs:amd64
+          tags: eriamschaffter/sage3-next_yjs:dev
 
       - name: Build and push Docker image for node_files
         uses: docker/build-push-action@v6
@@ -55,7 +55,7 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: eriamschaffter/sage3-next_files:amd64
+          tags: eriamschaffter/sage3-next_files:dev
 
       - name: Build and push Docker image for seer
         uses: docker/build-push-action@v6
@@ -64,4 +64,4 @@ jobs:
           context: "{{defaultContext}}:."
           platforms: linux/amd64
           push: true
-          tags: eriamschaffter/sage3-agents:amd64
+          tags: eriamschaffter/sage3-agents:dev
