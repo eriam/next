@@ -84,9 +84,6 @@ export function passportLDAPSetup(config: SBAuthLDAPConfig): boolean {
 
             const role = resolveRole(memberOf, config.groupMapping, config.defaultRole);
 
-            console.log(`LDAP> Authenticated user: ${displayName} (${email}), role: ${role}`);
-            console.log(`LDAP> memberOf:`, memberOf);
-
             const extras = { displayName, email, picture: '', role };
             const authRecord = await SBAuthDB.findOrAddAuth('ldap', providerId, extras);
 
@@ -103,7 +100,6 @@ export function passportLDAPSetup(config: SBAuthLDAPConfig): boolean {
       )
     );
 
-    console.log('LDAP> Setup done');
     return true;
   } catch (error) {
     console.error('LDAP> Failed setup:', error);

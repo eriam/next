@@ -52,7 +52,6 @@ export function passportLocalSetup(): boolean {
       })
     );
 
-    console.log('Local Login> Setup done');
     return true;
   } catch (error) {
     console.error('Local Login> Failed setup', error);

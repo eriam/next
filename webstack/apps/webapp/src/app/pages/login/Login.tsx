@@ -62,25 +62,18 @@ export function LoginPage() {
 
       if (savedContext) {
         const context = JSON.parse(savedContext);
-        console.log('Board Context: Retrieved from localStorage:', context);
 
         // Check if context is not too old (24 hours)
         const isRecent = Date.now() - context.timestamp < 24 * 60 * 60 * 1000;
-        const age = Date.now() - context.timestamp;
 
         if (isRecent && context.roomId && context.boardId) {
-          console.log(`Board Context: Valid context found (age: ${Math.round(age / 1000)}s)`);
           return context;
         } else {
-          // Remove old context
-          console.log(`Board Context: Removing stale context (age: ${Math.round(age / 1000)}s, isRecent: ${isRecent})`);
           localStorage.removeItem('sage3_pending_board');
         }
-      } else {
-        console.log('Board Context: No saved context found');
       }
     } catch (error) {
-      console.warn('Board Context: Error reading saved context:', error);
+      console.error('Board Context: Error reading saved context:', error);
       localStorage.removeItem('sage3_pending_board');
     }
     return null;
@@ -108,9 +101,8 @@ export function LoginPage() {
 
         try {
           localStorage.setItem('sage3_pending_board', JSON.stringify(boardContext));
-          console.log('Board Context: Preserved from returnTo parameter:', boardContext);
         } catch (error) {
-          console.warn('Board Context: Failed to preserve context:', error);
+          console.error('Board Context: Failed to preserve context:', error);
         }
       }
     }
@@ -234,20 +226,14 @@ export function LoginPage() {
    * Initializes page and retrieves server information
    */
   useEffect(() => {
-    console.log('Login Page: Initializing');
     document.title = 'SAGE3 - Login';
 
     GetServerInfo().then((conf) => {
-      console.log('Login Page: Server info received:', { serverName: conf.serverName, logins: conf.logins });
       if (conf.serverName) setServerName(conf.serverName);
       if (conf.logins) setLogins(conf.logins);
     });
 
-    // Preserve board context from URL parameters before checking for errors
     preserveBoardContext();
-
-    // Check for authentication errors on page load
-    console.log('Login Page: Checking for auth errors in URL:', window.location.search);
     checkAuthErrors();
   }, [checkAuthErrors, preserveBoardContext]);
 
@@ -270,42 +256,18 @@ export function LoginPage() {
    * Handles authentication state changes - ONLY checks for auth, not user accounts
    */
   const authNavCheck = useCallback(() => {
-    // Log authentication state for debugging
-    console.log('Auth State Check:', {
-      auth: auth ? { id: auth.id, provider: auth.provider, email: auth.email } : null,
-      authLoading,
-      timestamp: new Date().toISOString(),
-    });
-
-    // Don't make decisions while still loading auth
-    if (authLoading) {
-      console.log('Auth Check: Still loading auth state, waiting...');
-      return;
-    }
+    if (authLoading) return;
 
     if (auth) {
-      console.log('Auth Success: Authentication present, redirecting to account creation/validation');
+      // Preserve saved board context — let account page handle it
+      getSavedBoardContext();
 
-      // Check for saved board context first to preserve it
-      const savedContext = getSavedBoardContext();
-      if (savedContext) {
-        console.log('Auth Success: Found saved board context, preserving for account page');
-        // Keep the context - don't remove it here, let account page handle it
-      }
-
-      // Check for returnTo URL parameter
       const returnTo = getReturnToUrl();
       if (returnTo) {
-        console.log('Auth Success: Found returnTo parameter, passing to account creation');
         toCreateUser(returnTo);
       } else {
-        console.log('Auth Success: No returnTo, going to account creation page');
         toCreateUser();
       }
-    } else if (!auth && !authLoading) {
-      console.log('Auth Check: No authentication present (normal unauthenticated state)');
-    } else {
-      console.log('Auth Check: Auth loading in progress');
     }
   }, [auth, authLoading, toCreateUser]);
 

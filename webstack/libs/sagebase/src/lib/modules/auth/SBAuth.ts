@@ -75,16 +75,6 @@ export class SBAuth {
    */
   private createOAuthCallbackHandler(providerName: string, strategyName: string) {
     return (req: Request, res: Response, next: NextFunction) => {
-      // Log OAuth callback details for debugging
-      // console.log(`${providerName}> OAuth callback received:`, {
-      //   query: req.query,
-      //   hasState: !!req.query.state,
-      //   hasCode: !!req.query.code,
-      //   hasError: !!req.query.error,
-      //   sessionId: req.sessionID,
-      //   timestamp: new Date().toISOString()
-      // });
-
       // Check for OAuth error in query parameters
       if (req.query.error) {
         console.error(`${providerName}> OAuth provider returned error:`, req.query.error, req.query.error_description);
@@ -106,16 +96,6 @@ export class SBAuth {
           return res.redirect(`/login?error=${providerName}_no_user&details=` + encodeURIComponent(details));
         }
 
-        // Log successful authentication with more details
-        // console.log(`${providerName}> Successful authentication:`, {
-        //   userId: user.id,
-        //   email: user.email || user.displayName || 'no-email',
-        //   provider: user.provider,
-        //   sessionId: req.sessionID,
-        //   userAgent: req.get('User-Agent'),
-        //   timestamp: new Date().toISOString(),
-        // });
-
         // Establish user session
         req.logIn(user, (loginErr: any) => {
           if (loginErr) {
@@ -124,13 +104,6 @@ export class SBAuth {
               `/login?error=${providerName}_login_failed&details=` + encodeURIComponent(loginErr.message || 'Session creation failed'),
             );
           }
-
-          // console.log(`${providerName}> Session established successfully:`, {
-          //   userId: user.id,
-          //   email: user.email || user.displayName || 'no-email',
-          //   sessionId: req.sessionID,
-          //   timestamp: new Date().toISOString(),
-          // });
 
           return res.redirect('/');
         });
