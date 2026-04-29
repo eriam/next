@@ -1,41 +1,52 @@
+/**
+ * Copyright (c) SAGE3 Development Team 2024. All Rights Reserved
+ * University of Hawaii, University of Illinois Chicago, Virginia Tech
+ *
+ * Distributed under the terms of the SAGE3 License.  The full license is in
+ * the file LICENSE, distributed as part of this software.
+ */
+
+import * as bcrypt from 'bcrypt';
 import * as passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
 
 import { SBAuthDB } from '../SBAuthDatabase';
-import { v4 } from 'uuid';
 
 export type SBAuthLocalConfig = {
   routeEndpoint: string;
 };
 
 /**
- * Setup function of the Local Passport Strategy.
+ * Setup the Passport Local strategy.
+ * Verifies username/password against bcrypt-hashed credentials stored in Redis.
  */
 export function passportLocalSetup(): boolean {
   try {
     passport.use(
-      new LocalStrategy(async (username, password, done) => {
+      new LocalStrategy(async (username: string, password: string, done: (err: unknown, user?: Express.User | false, options?: { message: string }) => void) => {
         try {
-
-          const providerId = v4();
-          const extras = { displayName: username, email: '', picture: '' };
-          const authRecord = await SBAuthDB.findOrAddAuth('local', providerId, extras);
-          if (authRecord) {
-            console.log("authRecord OK");
-            done(null, authRecord);
-          } else {
-            console.log("authRecord NOK");
-            done(null, false);
-          }
-          /*
-          const user = await SBAuthDB.getUserByUsername(username);
-          if (!user || user.password !== 'your-hardcoded-password') {
+          const record = await SBAuthDB.getLocalUser(username);
+          if (!record) {
             return done(null, false, { message: 'Invalid username or password' });
           }
-          return done(null, user);
-          */
+
+          const match = await bcrypt.compare(password, record.passwordHash);
+          if (!match) {
+            return done(null, false, { message: 'Invalid username or password' });
+          }
+
+          const extras = {
+            displayName: record.displayName || username,
+            email: record.email || '',
+            picture: '',
+          };
+          const authRecord = await SBAuthDB.findOrAddAuth('local', username, extras);
+          if (authRecord) {
+            return done(null, authRecord);
+          } else {
+            return done(null, false, { message: 'Authentication failed' });
+          }
         } catch (error) {
-          console.log("authRecord NOK" + error);
           return done(error);
         }
       })
@@ -44,7 +55,7 @@ export function passportLocalSetup(): boolean {
     console.log('Local Login> Setup done');
     return true;
   } catch (error) {
-    console.log('Local Login> Failed setup', error);
+    console.error('Local Login> Failed setup', error);
     return false;
   }
 }
