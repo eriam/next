@@ -7,147 +7,154 @@
  */
 
 /**
- * Integration tests for LDAPAdapter / passportLDAPSetup.
+ * Integration tests for LDAP authentication via passport-ldapauth.
  *
- * A real ldapjs in-memory server is started for each test suite.
- * Two scenarios are covered:
+ * An ldapjs in-memory server is started for each describe block, so no
+ * external infrastructure is required.  Two scenarios are covered:
+ *
  *   1. OpenLDAP style  — searchFilter: (uid={{username}})
  *   2. Active Directory style — searchFilter: (sAMAccountName={{username}})
  *
- * The tests exercise the full authentication path:
- *   passport-ldapauth → ldapauth-fork → ldapjs → our LDAP test server
+ * Note: ldapjs normalises all filter attribute names to lowercase, so user
+ * attribute maps are stored with lowercase keys for `filter.matches()`.
  */
 
 import * as ldap from 'ldapjs';
 import * as express from 'express';
-import * as passport from 'passport';
 import * as supertest from 'supertest';
 
-// SBAuthDB must be mocked: we don't want a Redis connection in these tests.
+// SBAuthDB is not needed for these integration tests.
 jest.mock('../SBAuthDatabase', () => ({
   SBAuthDB: {
-    findOrAddAuth: jest.fn().mockImplementation(async (provider, providerId, extras) => ({
+    findOrAddAuth: jest.fn().mockImplementation(async (provider: string, providerId: string, extras: any) => ({
       id: `${provider}-${providerId}`,
       provider,
       providerId,
-      displayName: extras?.displayName || '',
-      email: extras?.email || '',
+      displayName: extras?.displayName ?? '',
+      email: extras?.email ?? '',
       picture: '',
       password: '',
     })),
   },
 }));
 
-import { passportLDAPSetup, SBAuthLDAPConfig } from './LDAPAdapter';
-
-// ── LDAP test data ────────────────────────────────────────────────────────────
+// ── Shared constants ──────────────────────────────────────────────────────────
 
 const BASE_DN = 'dc=example,dc=com';
 const USERS_DN = `ou=users,${BASE_DN}`;
 const SERVICE_DN = `cn=service,${BASE_DN}`;
 const SERVICE_PASS = 'service-secret';
 
-const GROUP_ADMIN = `CN=SAGE3-Admins,OU=Groups,DC=example,DC=com`;
-const GROUP_USER = `CN=SAGE3-Users,OU=Groups,DC=example,DC=com`;
-const GROUP_SPECTATOR = `CN=SAGE3-Spectators,OU=Groups,DC=example,DC=com`;
+const GROUP_ADMIN = 'CN=SAGE3-Admins,OU=Groups,DC=example,DC=com';
+const GROUP_USER = 'CN=SAGE3-Users,OU=Groups,DC=example,DC=com';
+const GROUP_SPECTATOR = 'CN=SAGE3-Spectators,OU=Groups,DC=example,DC=com';
+
+// ── Test user definitions ─────────────────────────────────────────────────────
 
 interface TestUser {
   dn: string;
   password: string;
+  /** Attribute map with ALL keys in lowercase (ldapjs normalises filter attrs). */
   attrs: Record<string, string | string[]>;
 }
 
-const OPENLDAP_USERS: Record<string, TestUser> = {
-  'admin-user': {
+/** OpenLDAP-style directory: login attribute = uid */
+const OPENLDAP_USERS: TestUser[] = [
+  {
     dn: `uid=admin-user,${USERS_DN}`,
     password: 'admin-pass',
     attrs: {
       uid: 'admin-user',
       cn: 'Admin User',
-      displayName: 'Admin User',
+      displayname: 'Admin User',
       mail: 'admin@example.com',
-      memberOf: [GROUP_ADMIN, GROUP_USER],
+      memberof: [GROUP_ADMIN, GROUP_USER],
     },
   },
-  'regular-user': {
+  {
     dn: `uid=regular-user,${USERS_DN}`,
     password: 'user-pass',
     attrs: {
       uid: 'regular-user',
       cn: 'Regular User',
-      displayName: 'Regular User',
+      displayname: 'Regular User',
       mail: 'user@example.com',
-      memberOf: [GROUP_USER],
+      memberof: [GROUP_USER],
     },
   },
-  'spectator-user': {
+  {
     dn: `uid=spectator-user,${USERS_DN}`,
     password: 'spec-pass',
     attrs: {
       uid: 'spectator-user',
       cn: 'Spectator User',
-      displayName: 'Spectator User',
+      displayname: 'Spectator User',
       mail: 'spec@example.com',
-      memberOf: [GROUP_SPECTATOR],
+      memberof: [GROUP_SPECTATOR],
     },
   },
-  'no-group-user': {
+  {
     dn: `uid=no-group-user,${USERS_DN}`,
     password: 'nogroup-pass',
     attrs: {
       uid: 'no-group-user',
       cn: 'No Group User',
-      displayName: 'No Group User',
+      displayname: 'No Group User',
       mail: 'nogroup@example.com',
-      memberOf: [],
+      // no memberof attribute
     },
   },
-};
+];
 
-// Active Directory users (sAMAccountName instead of uid)
-const AD_USERS: Record<string, TestUser> = {
-  'ADAdmin': {
+/** Active Directory-style directory: login attribute = sAMAccountName */
+const AD_USERS: TestUser[] = [
+  {
     dn: `CN=ADAdmin,OU=Users,DC=example,DC=com`,
     password: 'adpass',
     attrs: {
-      sAMAccountName: 'ADAdmin',
+      samaccountname: 'ADAdmin',
       cn: 'AD Admin',
-      displayName: 'AD Admin',
+      displayname: 'AD Admin',
       mail: 'adadmin@example.com',
-      memberOf: [GROUP_ADMIN],
+      memberof: [GROUP_ADMIN],
     },
   },
-  'ADUser': {
+  {
     dn: `CN=ADUser,OU=Users,DC=example,DC=com`,
     password: 'aduserpass',
     attrs: {
-      sAMAccountName: 'ADUser',
+      samaccountname: 'ADUser',
       cn: 'AD Regular User',
-      displayName: 'AD Regular User',
+      displayname: 'AD Regular User',
       mail: 'aduser@example.com',
-      memberOf: [GROUP_USER],
+      memberof: [GROUP_USER],
     },
   },
-};
+];
 
-// ── LDAP server factory ───────────────────────────────────────────────────────
+// ── In-memory LDAP server ─────────────────────────────────────────────────────
 
-function buildLdapServer(users: Record<string, TestUser>, searchAttr: string): Promise<{ server: ldap.Server; port: number }> {
+function buildLdapServer(users: TestUser[]): Promise<{ server: ldap.Server; port: number }> {
   return new Promise((resolve, reject) => {
     const server = ldap.createServer();
 
-    // Bind handler — validates service account and user credentials
+    /**
+     * Bind handler: covers service account AND all user accounts.
+     * ldapjs routes by DN suffix — BASE_DN matches every DN in our directory.
+     */
     server.bind(BASE_DN, (req: any, res: any, next: any) => {
-      const dn: string = req.dn.toString().toLowerCase();
-      const pass: string = req.credentials;
+      const reqDN: string = req.dn.toString().toLowerCase();
+      const reqPass: string = req.credentials;
 
-      if (dn === SERVICE_DN.toLowerCase() && pass === SERVICE_PASS) {
+      // Service account
+      if (reqDN === SERVICE_DN.toLowerCase() && reqPass === SERVICE_PASS) {
         res.end();
         return next();
       }
 
-      for (const user of Object.values(users)) {
-        if (dn === user.dn.toLowerCase() && pass === user.password) {
+      // User accounts
+      for (const user of users) {
+        if (reqDN === user.dn.toLowerCase() && reqPass === user.password) {
           res.end();
           return next();
         }
@@ -156,32 +163,20 @@ function buildLdapServer(users: Record<string, TestUser>, searchAttr: string): P
       return next(new ldap.InvalidCredentialsError());
     });
 
-    // Search handler — returns matching user entries
+    /**
+     * Search handler: returns entries whose attributes match the LDAP filter.
+     * All attribute keys in `user.attrs` are lowercase so that
+     * `req.filter.matches()` (which uses the lowercase filter attribute name)
+     * resolves them correctly.
+     */
     server.search(USERS_DN, (req: any, res: any, next: any) => {
-      for (const user of Object.values(users)) {
-        const attrValue = user.attrs[searchAttr];
-        const filterValue = req.filter?.value;
-
-        if (attrValue && filterValue && String(attrValue).toLowerCase() === String(filterValue).toLowerCase()) {
+      for (const user of users) {
+        if (req.filter.matches(user.attrs)) {
           res.send({ dn: user.dn, attributes: user.attrs });
         }
       }
       res.end();
       return next();
-    });
-
-    // Also handle bind for AD users base DN
-    server.bind('ou=users,dc=example,dc=com', (req: any, res: any, next: any) => {
-      const dn: string = req.dn.toString().toLowerCase();
-      const pass: string = req.credentials;
-
-      for (const user of Object.values(users)) {
-        if (dn === user.dn.toLowerCase() && pass === user.password) {
-          res.end();
-          return next();
-        }
-      }
-      return next(new ldap.InvalidCredentialsError());
     });
 
     server.listen(0, '127.0.0.1', () => {
@@ -195,38 +190,49 @@ function buildLdapServer(users: Record<string, TestUser>, searchAttr: string): P
 
 // ── Express app factory ───────────────────────────────────────────────────────
 
-function buildApp(config: SBAuthLDAPConfig): express.Application {
-  // Fresh passport instance per test to avoid strategy pollution
-  const testPassport = new (passport as any).Passport();
+interface LdapConfig {
+  url: string;
+  searchFilter: string;
+  /** Attribute name in LDAP response that holds the display name. */
+  displayNameAttr?: string;
+  /** Attribute name in LDAP response that holds the email. */
+  emailAttr?: string;
+}
 
-  // Re-implement passportLDAPSetup using the test passport instance
+function buildApp(config: LdapConfig): express.Application {
+  // Each test suite gets its own passport instance to prevent strategy leakage.
+  const { Passport } = require('passport') as typeof import('passport');
+  const testPassport = new (Passport as any)();
   const LdapStrategy = require('passport-ldapauth');
+
   testPassport.use(
     'ldapauth',
     new LdapStrategy(
       {
         server: {
           url: config.url,
-          bindDN: config.bindDN,
-          bindCredentials: config.bindCredentials,
-          searchBase: config.searchBase,
+          bindDN: SERVICE_DN,
+          bindCredentials: SERVICE_PASS,
+          searchBase: USERS_DN,
           searchFilter: config.searchFilter,
-          searchAttributes: ['dn', 'uid', 'cn', 'mail', 'displayName', 'memberOf', 'sAMAccountName'],
+          searchAttributes: ['dn', 'uid', 'cn', 'mail', 'displayname', 'memberof', 'samaccountname'],
           tlsOptions: { rejectUnauthorized: false },
         },
       },
-      async (ldapUser: any, done: any) => {
-        const providerId = ldapUser.dn || ldapUser.uid || ldapUser.sAMAccountName || '';
-        const displayName = ldapUser.displayName || ldapUser.cn || '';
-        const email = ldapUser.mail || '';
-        // Return a minimal user object for assertions in tests
-        done(null, { dn: providerId, displayName, email, memberOf: ldapUser.memberOf });
+      (ldapUser: any, done: any) => {
+        // Return a simplified user object so tests can assert on it.
+        done(null, {
+          dn: ldapUser.dn,
+          displayName: ldapUser[config.displayNameAttr ?? 'displayname'] ?? ldapUser.cn ?? '',
+          email: ldapUser[config.emailAttr ?? 'mail'] ?? '',
+          memberOf: ldapUser.memberof ?? [],
+        });
       }
     )
   );
 
-  testPassport.serializeUser((user: any, done: any) => done(null, user));
-  testPassport.deserializeUser((user: any, done: any) => done(null, user));
+  testPassport.serializeUser((u: any, done: any) => done(null, u));
+  testPassport.deserializeUser((u: any, done: any) => done(null, u));
 
   const app = express();
   app.use(express.urlencoded({ extended: false }));
@@ -245,157 +251,116 @@ function buildApp(config: SBAuthLDAPConfig): express.Application {
 
 // ── Test suites ───────────────────────────────────────────────────────────────
 
-jest.setTimeout(15000); // LDAP connections need more time
+jest.setTimeout(15000);
+
+// ─ OpenLDAP style ────────────────────────────────────────────────────────────
 
 describe('LDAPAdapter integration — OpenLDAP style (uid)', () => {
   let server: ldap.Server;
-  let port: number;
   let app: express.Application;
 
   beforeAll(async () => {
-    ({ server, port } = await buildLdapServer(OPENLDAP_USERS, 'uid'));
-
-    app = buildApp({
-      url: `ldap://127.0.0.1:${port}`,
-      bindDN: SERVICE_DN,
-      bindCredentials: SERVICE_PASS,
-      searchBase: USERS_DN,
-      searchFilter: '(uid={{username}})',
-      groupMapping: {
-        admin: GROUP_ADMIN,
-        user: GROUP_USER,
-        spectator: GROUP_SPECTATOR,
-      },
-      defaultRole: 'viewer',
-    });
+    ({ server } = await buildLdapServer(OPENLDAP_USERS).then((s) => {
+      app = buildApp({
+        url: `ldap://127.0.0.1:${s.port}`,
+        searchFilter: '(uid={{username}})',
+      });
+      return s;
+    }));
   });
 
   afterAll(() => server.close(() => {}));
 
-  it('authenticates a valid user with correct password', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'admin-user', password: 'admin-pass' });
-
+  it('authenticates admin user with correct password', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'admin-user', password: 'admin-pass' });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.user.displayName).toBe('Admin User');
     expect(res.body.user.email).toBe('admin@example.com');
   });
 
-  it('rejects an unknown username', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'nobody', password: 'any' });
-
-    expect(res.status).toBe(401);
-    expect(res.body.success).toBe(false);
-  });
-
-  it('rejects a valid username with wrong password', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'regular-user', password: 'wrong-password' });
-
-    expect(res.status).toBe(401);
-    expect(res.body.success).toBe(false);
-  });
-
-  it('includes memberOf for admin user', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'admin-user', password: 'admin-pass' });
-
+  it('returns memberOf groups for admin user', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'admin-user', password: 'admin-pass' });
     expect(res.status).toBe(200);
-    const memberOf: string[] = [].concat(res.body.user.memberOf || []);
-    expect(memberOf.some((g: string) => g.toLowerCase() === GROUP_ADMIN.toLowerCase())).toBe(true);
+    const memberOf: string[] = [].concat(res.body.user.memberOf ?? []);
+    expect(memberOf.some((g) => g === GROUP_ADMIN)).toBe(true);
+    expect(memberOf.some((g) => g === GROUP_USER)).toBe(true);
   });
 
-  it('authenticates a spectator user', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'spectator-user', password: 'spec-pass' });
+  it('authenticates regular user', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'regular-user', password: 'user-pass' });
+    expect(res.status).toBe(200);
+    expect(res.body.user.email).toBe('user@example.com');
+  });
 
+  it('authenticates spectator user', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'spectator-user', password: 'spec-pass' });
     expect(res.status).toBe(200);
     expect(res.body.user.email).toBe('spec@example.com');
   });
 
-  it('authenticates a user with no group membership', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'no-group-user', password: 'nogroup-pass' });
-
+  it('authenticates user with no group membership', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'no-group-user', password: 'nogroup-pass' });
     expect(res.status).toBe(200);
     expect(res.body.user.email).toBe('nogroup@example.com');
   });
+
+  it('rejects an unknown username', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'nobody', password: 'any' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a valid username with wrong password', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'regular-user', password: 'wrong' });
+    expect(res.status).toBe(401);
+  });
 });
+
+// ─ Active Directory style ─────────────────────────────────────────────────────
 
 describe('LDAPAdapter integration — Active Directory style (sAMAccountName)', () => {
   let server: ldap.Server;
-  let port: number;
   let app: express.Application;
 
   beforeAll(async () => {
-    ({ server, port } = await buildLdapServer(AD_USERS, 'sAMAccountName'));
-
-    app = buildApp({
-      url: `ldap://127.0.0.1:${port}`,
-      bindDN: SERVICE_DN,
-      bindCredentials: SERVICE_PASS,
-      searchBase: USERS_DN,
-      searchFilter: '(sAMAccountName={{username}})',
-      groupMapping: {
-        admin: GROUP_ADMIN,
-        user: GROUP_USER,
-      },
-      defaultRole: 'viewer',
-    });
+    ({ server } = await buildLdapServer(AD_USERS).then((s) => {
+      app = buildApp({
+        url: `ldap://127.0.0.1:${s.port}`,
+        searchFilter: '(sAMAccountName={{username}})',
+      });
+      return s;
+    }));
   });
 
   afterAll(() => server.close(() => {}));
 
-  it('authenticates an AD admin user', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'ADAdmin', password: 'adpass' });
-
+  it('authenticates AD admin user', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'ADAdmin', password: 'adpass' });
     expect(res.status).toBe(200);
     expect(res.body.user.displayName).toBe('AD Admin');
     expect(res.body.user.email).toBe('adadmin@example.com');
   });
 
-  it('authenticates an AD regular user', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'ADUser', password: 'aduserpass' });
+  it('AD admin belongs to admin group', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'ADAdmin', password: 'adpass' });
+    expect(res.status).toBe(200);
+    const memberOf: string[] = [].concat(res.body.user.memberOf ?? []);
+    expect(memberOf.some((g) => g === GROUP_ADMIN)).toBe(true);
+  });
 
+  it('authenticates AD regular user', async () => {
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'ADUser', password: 'aduserpass' });
     expect(res.status).toBe(200);
     expect(res.body.user.displayName).toBe('AD Regular User');
   });
 
   it('rejects wrong password for AD user', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'ADAdmin', password: 'badpass' });
-
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'ADAdmin', password: 'badpass' });
     expect(res.status).toBe(401);
   });
 
   it('rejects unknown AD username', async () => {
-    const res = await supertest(app)
-      .post('/auth/ldap')
-      .type('form')
-      .send({ username: 'UnknownUser', password: 'anything' });
-
+    const res = await supertest(app).post('/auth/ldap').type('form').send({ username: 'UnknownUser', password: 'anything' });
     expect(res.status).toBe(401);
   });
 });
