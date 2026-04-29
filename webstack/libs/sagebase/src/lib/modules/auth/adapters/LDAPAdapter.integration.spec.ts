@@ -185,7 +185,7 @@ function buildLdapServer(users: Record<string, TestUser>, searchAttr: string): P
     });
 
     server.listen(0, '127.0.0.1', () => {
-      const address = server.address() as { port: number };
+      const address = (server as any).address() as { port: number };
       resolve({ server, port: address.port });
     });
 
@@ -270,7 +270,7 @@ describe('LDAPAdapter integration — OpenLDAP style (uid)', () => {
     });
   });
 
-  afterAll(() => server.close());
+  afterAll(() => server.close(() => {}));
 
   it('authenticates a valid user with correct password', async () => {
     const res = await supertest(app)
@@ -358,7 +358,7 @@ describe('LDAPAdapter integration — Active Directory style (sAMAccountName)', 
     });
   });
 
-  afterAll(() => server.close());
+  afterAll(() => server.close(() => {}));
 
   it('authenticates an AD admin user', async () => {
     const res = await supertest(app)
