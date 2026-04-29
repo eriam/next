@@ -274,5 +274,5 @@ class SBAuthDatabase {
   }
 }
 
-export type { SBAuthDatabase };
+export { SBAuthDatabase };
 export const SBAuthDB = new SBAuthDatabase();
