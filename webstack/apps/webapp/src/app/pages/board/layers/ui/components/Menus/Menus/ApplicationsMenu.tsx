@@ -25,6 +25,7 @@ const development: boolean = !process.env.NODE_ENV || process.env.NODE_ENV === '
 export interface ApplicationProps {
   boardId: string;
   roomId: string;
+  onActionComplete?: () => void;
 }
 
 export function ApplicationsMenu(props: ApplicationProps) {
@@ -65,7 +66,7 @@ export function ApplicationsMenu(props: ApplicationProps) {
   // User
   const { user, accessId } = useUser();
 
-  const newApplication = (appName: AppName) => {
+  const newApplication = async (appName: AppName) => {
     if (!user) return;
 
     const state = {} as AppState;
@@ -100,7 +101,7 @@ export function ApplicationsMenu(props: ApplicationProps) {
     }
 
     const title = appName == 'Stickie' ? user.data.name : ''; // Gross
-    createApp({
+    const result = await createApp({
       title: title,
       roomId: props.roomId,
       boardId: props.boardId,
@@ -113,6 +114,10 @@ export function ApplicationsMenu(props: ApplicationProps) {
       dragging: false,
       pinned: false,
     });
+
+    if (result?.success) {
+      props.onActionComplete?.();
+    }
   };
 
   return (
