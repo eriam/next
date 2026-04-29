@@ -190,7 +190,7 @@ async function startServer() {
       return;
     }
 
-    SAGEBase.Auth.sessionParser(request, {}, () => {
+    SAGEBase.Auth.sessionParser(request as any, {} as any, () => {
       let token = request.headers.authorization;
       if (config.auth.jwtConfig && token) {
         // extract the token from the header

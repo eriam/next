@@ -81,7 +81,7 @@ export function passportLDAPSetup(config: SBAuthLDAPConfig): boolean {
         async (ldapUser: LdapUserProfile, done: (err: Error | null, user?: Express.User | false) => void) => {
           try {
             // Build a stable provider ID from the LDAP DN
-            const providerId = ldapUser.dn || ldapUser.uid || ldapUser.sAMAccountName;
+            const providerId = ldapUser.dn || ldapUser.uid || ldapUser.sAMAccountName || '';
             const displayName = ldapUser.displayName || ldapUser.cn || ldapUser.uid || '';
             const email = ldapUser.mail || '';
 

@@ -126,14 +126,14 @@ class SBAuthDatabase {
    * @param providerId The unique id for the provider
    * @returns {SBAuthSchema|undered} returns an SBAuthscema if add was successful
    */
-  public async addAuth(provider: string, providerId: string, extras: AuthExtras): Promise<SBAuthSchema | undefined> {
+  public async addAuth(provider: string, providerId: string, extras?: AuthExtras): Promise<SBAuthSchema | undefined> {
     const doc = {
       provider,
       providerId,
       id: v4(),
-      displayName: extras.displayName,
-      email: extras.email,
-      picture: extras.picture,
+      displayName: extras?.displayName,
+      email: extras?.email,
+      picture: extras?.picture,
     } as SBAuthSchema;
     const key = provider + providerId;
     const redisRes = await this._redisClient.json.set(`${this._prefix}:${key}`, '.', doc);
@@ -275,5 +275,4 @@ class SBAuthDatabase {
 }
 
 export type { SBAuthDatabase };
-export type { AuthExtras };
 export const SBAuthDB = new SBAuthDatabase();
