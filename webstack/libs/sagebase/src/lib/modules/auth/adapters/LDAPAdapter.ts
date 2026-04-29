@@ -10,7 +10,17 @@ import * as passport from 'passport';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LdapStrategy = require('passport-ldapauth');
 
-import { SBAuthDB } from '../SBAuthDatabase';
+import { SBAuthDB, AuthExtras } from '../SBAuthDatabase';
+
+type LdapUserProfile = {
+  dn?: string;
+  uid?: string;
+  sAMAccountName?: string;
+  cn?: string;
+  displayName?: string;
+  mail?: string;
+  memberOf?: string | string[];
+};
 
 export type SBAuthLDAPConfig = {
   url: string;
@@ -68,7 +78,7 @@ export function passportLDAPSetup(config: SBAuthLDAPConfig): boolean {
             tlsOptions: config.tlsOptions || { rejectUnauthorized: false },
           },
         },
-        async (ldapUser: any, done: any) => {
+        async (ldapUser: LdapUserProfile, done: (err: Error | null, user?: Express.User | false) => void) => {
           try {
             // Build a stable provider ID from the LDAP DN
             const providerId = ldapUser.dn || ldapUser.uid || ldapUser.sAMAccountName;
@@ -84,7 +94,7 @@ export function passportLDAPSetup(config: SBAuthLDAPConfig): boolean {
 
             const role = resolveRole(memberOf, config.groupMapping, config.defaultRole);
 
-            const extras = { displayName, email, picture: '', role };
+            const extras: AuthExtras = { displayName, email, picture: '', role };
             const authRecord = await SBAuthDB.findOrAddAuth('ldap', providerId, extras);
 
             if (authRecord) {

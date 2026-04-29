@@ -140,7 +140,8 @@
   },
   "resolutions": {
     "**/oauth": "0.10.0",
-    "@parcel/watcher": "2.3.0"
+    "@parcel/watcher": "2.3.0",
+    "@types/express": "4.17.21"
   },
   "devDependencies": {
     "@babel/core": "^7.15.5",

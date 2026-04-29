@@ -10,7 +10,7 @@ import * as bcrypt from 'bcrypt';
 import * as passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
 
-import { SBAuthDB } from '../SBAuthDatabase';
+import { SBAuthDB, AuthExtras } from '../SBAuthDatabase';
 
 export type SBAuthLocalConfig = {
   routeEndpoint: string;
@@ -35,7 +35,7 @@ export function passportLocalSetup(): boolean {
             return done(null, false, { message: 'Invalid username or password' });
           }
 
-          const extras = {
+          const extras: AuthExtras = {
             displayName: record.displayName || username,
             email: record.email || '',
             picture: '',

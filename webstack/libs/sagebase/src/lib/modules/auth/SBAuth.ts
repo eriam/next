@@ -9,7 +9,7 @@
 import { RedisClientType } from 'redis';
 import RedisStore from 'connect-redis';
 
-import { Express, NextFunction, Request, Response } from 'express';
+import { Express, NextFunction, Request, RequestHandler, Response } from 'express';
 import * as session from 'express-session';
 import * as passport from 'passport';
 
@@ -65,7 +65,7 @@ export class SBAuth {
 
   private _database!: SBAuthDatabase;
 
-  private _sessionParser!: any;
+  private _sessionParser!: RequestHandler;
 
   /**
    * Creates a generalized OAuth callback handler with enhanced error logging and security validation
@@ -84,7 +84,7 @@ export class SBAuth {
         );
       }
 
-      passport.authenticate(strategyName, (err: any, user: any, info: any) => {
+      passport.authenticate(strategyName, (err: Error | null, user: Express.User | false, info: { message?: string; reason?: string }) => {
         if (err) {
           console.error(`${providerName}> Authentication error:`, err);
           return res.redirect(`/login?error=${providerName}_error&details=` + encodeURIComponent(err.message || 'Unknown error'));
@@ -97,7 +97,7 @@ export class SBAuth {
         }
 
         // Establish user session
-        req.logIn(user, (loginErr: any) => {
+        req.logIn(user, (loginErr: Error) => {
           if (loginErr) {
             console.error(`${providerName}> Session login error:`, loginErr);
             return res.redirect(
@@ -234,11 +234,11 @@ export class SBAuth {
         // Register a dedicated /auth/ldap route when local is not enabled
         if (!config.strategies.includes('local')) {
           express.post('/auth/ldap', (req: Request, res: Response, next: NextFunction) => {
-            passport.authenticate('ldapauth', (err: any, user: any) => {
+            passport.authenticate('ldapauth', (err: Error | null, user: Express.User | false) => {
               if (err || !user) {
                 return res.redirect('/?error=ldap_failed');
               }
-              req.logIn(user, (loginErr: any) => {
+              req.logIn(user, (loginErr: Error) => {
                 if (loginErr) return next(loginErr);
                 return res.redirect('/');
               });
@@ -256,10 +256,10 @@ export class SBAuth {
           if (ldapEnabled) {
             // Chain: try LDAP first, fall back to local
             express.post(localEndpoint, (req: Request, res: Response, next: NextFunction) => {
-              passport.authenticate('ldapauth', (err: any, user: any) => {
+              passport.authenticate('ldapauth', (err: Error | null, user: Express.User | false) => {
                 if (user) {
                   // LDAP auth succeeded
-                  req.logIn(user, (loginErr: any) => {
+                  req.logIn(user, (loginErr: Error) => {
                     if (loginErr) return next(loginErr);
                     return res.redirect('/');
                   });
@@ -318,16 +318,15 @@ export class SBAuth {
   /**
    * Log the current user out of the session.
    */
-  public logout(req: any, res: Response, next: NextFunction): void {
-    const user = req.user;
+  public logout(req: Request, res: Response, next: NextFunction): void {
+    const user = req.user as SBAuthSchema | undefined;
     if (!user) {
       res.send({ success: true });
       return;
     }
-    if (req.user?.provider == 'guest') {
-      this._database.deleteAuth(req.user.provider, req.user.providerId);
+    if (user.provider === 'guest') {
+      this._database.deleteAuth(user.provider, user.providerId);
     }
-    // req.session.destroy();
     req.session.user = null;
 
     req.logout({ keepSessionInfo: false }, function (err: Error) {

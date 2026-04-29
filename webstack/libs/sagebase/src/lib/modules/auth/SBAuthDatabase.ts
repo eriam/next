@@ -9,6 +9,14 @@
 import { RedisClientType, SchemaFieldTypes } from 'redis';
 import { v4 } from 'uuid';
 
+// Extra profile data passed from auth providers when creating/finding auth records
+export type AuthExtras = {
+  displayName?: string;
+  email?: string;
+  picture?: string;
+  role?: string;
+};
+
 // Local user credential record (stored separately from session identity)
 export type LocalUserRecord = {
   username: string;
@@ -102,7 +110,7 @@ class SBAuthDatabase {
    * @param providerId The unique id for the provider
    * @returns {SBAuthSchema|undered} returns an SBAuthSchema if one was found or added succesfully.
    */
-  public async findOrAddAuth(provider: string, providerId: string, extras?: any): Promise<SBAuthSchema | undefined> {
+  public async findOrAddAuth(provider: string, providerId: string, extras?: AuthExtras): Promise<SBAuthSchema | undefined> {
     let auth = await this.readAuth(provider, providerId);
     if (auth != undefined) {
       return auth;
@@ -118,7 +126,7 @@ class SBAuthDatabase {
    * @param providerId The unique id for the provider
    * @returns {SBAuthSchema|undered} returns an SBAuthscema if add was successful
    */
-  public async addAuth(provider: string, providerId: string, extras: any): Promise<SBAuthSchema | undefined> {
+  public async addAuth(provider: string, providerId: string, extras: AuthExtras): Promise<SBAuthSchema | undefined> {
     const doc = {
       provider,
       providerId,
@@ -267,5 +275,5 @@ class SBAuthDatabase {
 }
 
 export type { SBAuthDatabase };
-export { LocalUserRecord };
+export type { AuthExtras };
 export const SBAuthDB = new SBAuthDatabase();
