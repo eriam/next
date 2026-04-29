@@ -325,31 +325,7 @@ export class SBAuth {
    */
   public async authenticate(req: Request, res: Response, next: NextFunction) {
     const user = req.user as SBAuthSchema;
-    const headerToken = req.headers['authorization'];
     if (user) {
-      next();
-    } else if (headerToken) {
-      // if there's a header token, try JWT strategy
-      console.log(headerToken);
-
-      const authHeader = req.headers.authorization || '';
-      const token = authHeader.replace('Bearer ', '').trim();
-    
-      if (token !== "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0MkBnbWFpbC5jb20iLCJuYW1lIjoidGVzdDIiLCJhZG1pbiI6ZmFsc2UsImlhdCI6MTcxODc1NjUyMywiZXhwIjoxNzUwMzE0MTIzLCJhdWQiOiJzYWdlMy5hcHAiLCJpc3MiOiJzYWdlM2FwcEBnbWFpbC5jb20ifQ.qHt_wdOwN8ZR7Eys4dyh_52fRR6KnINzw7f1lL0JYW1LMmmLZqm4IoFkupst4NTPO6VG03cCYo4nnD9leMeSckVKqM0dVvU1ctV2dPQxb5WORz8BsIAdZTEVDogXBHMHb4GvNmxcNoRxSvPEGRhCEPwkHHHEyf1icqNixoRPNmd81a6vTzcUpHovqX9kz01AoXicZNtbhMrIZv_l8Ab2bSjcwVebba4zjdCc8DaBfm9cEicX8NnmflJvnRDLAM3UmXLLeLoyVvnpYl6uZ6BJaBxeseykU0mRQXDyCdBYQuwZx3rCF1nbxLbleEypMQjwV9rvh7hNTwQsIbYOzLIilg") {
-        res.status(403);
-        res.send({ success: false, authentication: false, auth: null });
-      }
-
-      //passport.authenticate('jwt', { session: false })(req, res, next);
-      req.user = {
-        password: "",                // Vide car sensible
-        provider: "jwt",             // "jwt" pour le test
-        providerId: "jwt-test-id",   // Identifiant fictif
-        id: "user-123",              // ID fictif utilisateur
-        displayName: "Test User",
-        email: "test@example.com",
-        picture: "https://example.com/avatar.png",
-      };
       next();
     } else {
       res.status(403);
