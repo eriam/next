@@ -44,7 +44,7 @@ export type SBAuthLDAPConfig = {
  * Checks in priority order: admin > user > spectator.
  * Returns defaultRole if no group matches.
  */
-function resolveRole(memberOf: string[], groupMapping: SBAuthLDAPConfig['groupMapping'], defaultRole: string): string {
+export function resolveRole(memberOf: string[], groupMapping: SBAuthLDAPConfig['groupMapping'], defaultRole: string): string {
   const normalizedMemberOf = memberOf.map((g) => g.toLowerCase());
 
   const priorityOrder: Array<'admin' | 'user' | 'spectator'> = ['admin', 'user', 'spectator'];
