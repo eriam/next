@@ -142,29 +142,31 @@ function buildLdapServer(users: TestUser[]): Promise<{ server: ldap.Server; port
      * Bind handler: covers service account AND all user accounts.
      * ldapjs routes by DN suffix — BASE_DN matches every DN in our directory.
      */
+    /**
+     * Normalise a DN string for comparison: lowercase and strip all
+     * whitespace so that "cn=foo, dc=bar" equals "cn=foo,dc=bar".
+     * ldapjs's `req.dn.toString()` inserts spaces after commas.
+     */
+    const normDN = (dn: string) => dn.toLowerCase().replace(/\s+/g, '');
+
     server.bind(BASE_DN, (req: any, res: any, next: any) => {
-      const reqDN: string = req.dn.toString().toLowerCase();
+      const reqDN = normDN(req.dn.toString());
       const reqPass: string = typeof req.credentials === 'string' ? req.credentials : req.credentials?.toString?.() ?? '';
 
-      console.error('[LDAP-BIND] dn=%s pass=%s', reqDN, reqPass ? '<provided>' : '<empty>');
-
       // Service account
-      if (reqDN === SERVICE_DN.toLowerCase() && reqPass === SERVICE_PASS) {
-        console.error('[LDAP-BIND] service account OK');
+      if (reqDN === normDN(SERVICE_DN) && reqPass === SERVICE_PASS) {
         res.end();
         return next();
       }
 
       // User accounts
       for (const user of users) {
-        if (reqDN === user.dn.toLowerCase() && reqPass === user.password) {
-          console.error('[LDAP-BIND] user %s OK', reqDN);
+        if (reqDN === normDN(user.dn) && reqPass === user.password) {
           res.end();
           return next();
         }
       }
 
-      console.error('[LDAP-BIND] REJECTED dn=%s', reqDN);
       return next(new ldap.InvalidCredentialsError());
     });
 
@@ -175,23 +177,17 @@ function buildLdapServer(users: TestUser[]): Promise<{ server: ldap.Server; port
      * resolves them correctly.
      */
     server.search(USERS_DN, (req: any, res: any, next: any) => {
-      console.error('[LDAP-SEARCH] filter=%s', req.filter.toString());
-      let found = 0;
       for (const user of users) {
         if (req.filter.matches(user.attrs)) {
-          console.error('[LDAP-SEARCH] matched dn=%s', user.dn);
           res.send({ dn: user.dn, attributes: user.attrs });
-          found++;
         }
       }
-      console.error('[LDAP-SEARCH] total matched=%d', found);
       res.end();
       return next();
     });
 
     server.listen(0, '127.0.0.1', () => {
       const address = (server as any).address() as { port: number };
-      console.error('[LDAP-SERVER] listening on port=%s address=%s', address?.port, JSON.stringify(address));
       resolve({ server, port: address.port });
     });
 
@@ -250,15 +246,9 @@ function buildApp(config: LdapConfig): express.Application {
   app.use(testPassport.initialize());
 
   app.post('/auth/ldap', (req, res, next) => {
-    testPassport.authenticate('ldapauth', (err: any, user: any, info: any) => {
-      if (err) {
-        console.error('[APP] auth error:', err.message, err.stack);
-        return res.status(500).json({ error: err.message });
-      }
-      if (!user) {
-        console.error('[APP] auth failed, info:', JSON.stringify(info));
-        return res.status(401).json({ success: false });
-      }
+    testPassport.authenticate('ldapauth', (err: any, user: any) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!user) return res.status(401).json({ success: false });
       return res.status(200).json({ success: true, user });
     })(req, res, next);
   });
