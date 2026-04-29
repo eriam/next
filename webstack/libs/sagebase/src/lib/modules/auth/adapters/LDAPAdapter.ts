@@ -104,7 +104,7 @@ export function passportLDAPSetup(config: SBAuthLDAPConfig): boolean {
             }
           } catch (error) {
             console.error('LDAP> Error processing user:', error);
-            done(error);
+            done(error instanceof Error ? error : new Error(String(error)));
           }
         }
       )
