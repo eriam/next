@@ -126,7 +126,7 @@ async function startServer() {
 
     // YJS Stuff
     if (wsPath == 'yjs') {
-      SAGEBase.Auth.sessionParser(request, {}, () => {
+      SAGEBase.Auth.sessionParser(request as any, {} as any, () => {
         const session = (request as any).session;
         if (!session?.passport?.user) {
           console.log('Authorization> WebSocket upgrade failed: Unauthorized');

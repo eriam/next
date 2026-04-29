@@ -327,7 +327,7 @@ export class SBAuth {
     if (user.provider === 'guest') {
       this._database.deleteAuth(user.provider, user.providerId);
     }
-    req.session.user = null;
+    (req.session as any).user = null;
 
     req.logout({ keepSessionInfo: false }, function (err: Error) {
       if (err) {
