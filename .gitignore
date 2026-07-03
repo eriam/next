@@ -50,3 +50,4 @@ deployment/configurations/chroma/data/*.sqlite3
 deployment/configurations/redis/data/
 deployment/exported_bundle/
 deployment/.env
+.worktrees/
