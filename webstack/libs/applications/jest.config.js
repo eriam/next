@@ -3,6 +3,7 @@ module.exports = {
   displayName: 'applications',
   preset: '../../jest.preset.js',
   testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['@testing-library/jest-dom'],
   globals: {
     'ts-jest': {
       tsconfig: '<rootDir>/tsconfig.spec.json',

@@ -16,6 +16,7 @@ import { AppWindow } from '../../components';
 // Styling
 import './styling.css';
 import { HiPuzzle } from 'react-icons/hi';
+import ToolbarComponent from './PluginAppToolbar';
 
 declare module 'react' {
   interface IframeHTMLAttributes<T> extends React.HTMLAttributes<T> {
@@ -77,11 +78,6 @@ function AppComponent(props: App): JSX.Element {
       </>
     </AppWindow>
   );
-}
-
-/* App toolbar component for the app PluginApp */
-function ToolbarComponent() {
-  return null;
 }
 
 /**
