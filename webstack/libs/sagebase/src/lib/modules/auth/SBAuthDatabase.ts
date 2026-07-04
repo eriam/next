@@ -26,12 +26,17 @@ export type SBAuthSchema = {
   displayName?: string;
   email?: string;
   picture?: string;
+  // Role resolved by the auth provider itself (currently only LDAP, via
+  // group→role mapping). Providers that don't resolve a role never set
+  // this, so it stays undefined for them — see permissions.ts's
+  // convertProviderToRole, which prefers this over the coarse provider map.
+  role?: string;
 };
 
 /**
  * The SAGEBase Database interface for the SBAuth Class
  */
-class SBAuthDatabase {
+export class SBAuthDatabase {
   private _redisClient!: RedisClientType;
 
   private _prefix!: string;
@@ -105,10 +110,32 @@ class SBAuthDatabase {
   public async findOrAddAuth(provider: string, providerId: string, extras?: AuthExtras): Promise<SBAuthSchema | undefined> {
     let auth = await this.readAuth(provider, providerId);
     if (auth != undefined) {
+      // Re-sync the role on every login for providers that resolve one
+      // dynamically (LDAP group membership can change between logins —
+      // access granted by group membership must also be revoked by it).
+      // Providers that never resolve a role (extras.role undefined) leave
+      // whatever's already stored untouched.
+      if (extras?.role !== undefined && auth.role !== extras.role) {
+        auth = await this.updateAuthRole(provider, providerId, extras.role);
+      }
       return auth;
     } else {
       auth = await this.addAuth(provider, providerId, extras);
       return auth;
+    }
+  }
+
+  /**
+   * Update the persisted role on an existing Auth record.
+   */
+  public async updateAuthRole(provider: string, providerId: string, role: string): Promise<SBAuthSchema | undefined> {
+    try {
+      const key = provider + providerId;
+      await this._redisClient.json.set(`${this._prefix}:${key}`, '$.role', role);
+      return await this.readAuth(provider, providerId);
+    } catch (error) {
+      this.ERRORLOG(error);
+      return undefined;
     }
   }
 
@@ -126,6 +153,7 @@ class SBAuthDatabase {
       displayName: extras?.displayName,
       email: extras?.email,
       picture: extras?.picture,
+      role: extras?.role,
     } as SBAuthSchema;
     const key = provider + providerId;
     const redisRes = await this._redisClient.json.set(`${this._prefix}:${key}`, '.', doc);
@@ -211,5 +239,4 @@ class SBAuthDatabase {
   }
 }
 
-export type { SBAuthDatabase };
 export const SBAuthDB = new SBAuthDatabase();
