@@ -59,8 +59,7 @@ const config: AbilityConfig = {
   abilites: [
     { role: ['admin'], resource: ['all'], action: ['all'] },
     { role: ['user'], resource: ['all'], action: ['all'] },
-    { role: ['guest'], resource: ['apps', 'presence', 'users'], action: ['create', 'read', 'update', 'sub', 'unsub'] },
-    { role: ['guest'], resource: ['apps'], action: ['resize', 'move', 'lasso'] },
+    { role: ['guest'], resource: ['presence', 'users'], action: ['create', 'read', 'update', 'sub', 'unsub'] },
     {
       role: ['guest'],
       resource: ['all'],
