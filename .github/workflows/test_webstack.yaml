@@ -34,11 +34,11 @@ jobs:
 
       - name: Run tests
         # Scoped to projects with a working jest config today, not --all: most
-        # other Nx projects (webapp, sageplugin, backend, homebase*) have a
-        # test target declared in workspace.json but no jest.config.js ever
-        # created (or are missing jest-environment-jsdom) — a pre-existing gap
-        # unrelated to this branch. Widen this list as those get fixed.
-        run: yarn nx run-many --target=test --projects=sagebase,shared --parallel=1
+        # other Nx projects (webapp, sageplugin, homebase*) have a test target
+        # declared in workspace.json but no jest.config.js ever created (or
+        # are missing jest-environment-jsdom) — a pre-existing gap unrelated
+        # to this branch. Widen this list as those get fixed.
+        run: yarn nx run-many --target=test --projects=sagebase,shared,backend --parallel=1
 
       - name: Build Homebase
         run: yarn build --if-present
