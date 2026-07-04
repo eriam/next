@@ -25,7 +25,7 @@ const TOOLBAR_ICON_ELEMENTS: Record<ToolbarIconName, JSX.Element> = {
 /* App toolbar component for the app PluginApp */
 export default function ToolbarComponent(props: App): JSX.Element | null {
   const updateState = useAppStore((state) => state.updateState);
-  const buttons = parseToolbarButtons((props.data.state as AppState).__toolbar);
+  const buttons = parseToolbarButtons((props.data.state as AppState)?.__toolbar);
 
   if (buttons.length === 0) return null;
 
