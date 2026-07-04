@@ -6,7 +6,57 @@
  * the file LICENSE, distributed as part of this software.
  */
 
-import { resolveRole } from './LDAPAdapter';
+const useMock = jest.fn();
+jest.mock('passport', () => ({ use: (...args: unknown[]) => useMock(...args) }));
+
+const LdapStrategyMock = jest.fn().mockImplementation(function (this: unknown) {
+  return this;
+});
+jest.mock('passport-ldapauth', () => LdapStrategyMock);
+
+// Imported after the mocks above so passportLDAPSetup picks them up.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { resolveRole, passportLDAPSetup } = require('./LDAPAdapter') as typeof import('./LDAPAdapter');
+
+const baseLdapConfig = {
+  url: 'ldap://ldap.example.com:389',
+  bindDN: 'cn=admin,dc=example,dc=com',
+  bindCredentials: 'admin',
+  searchBase: 'ou=users,dc=example,dc=com',
+  searchFilter: '(uid={{username}})',
+  groupMapping: {},
+  defaultRole: 'user',
+};
+
+describe('passportLDAPSetup', () => {
+  beforeEach(() => {
+    useMock.mockClear();
+    LdapStrategyMock.mockClear();
+  });
+
+  it('defaults to verifying the TLS certificate when tlsOptions is omitted', () => {
+    passportLDAPSetup(baseLdapConfig);
+    const strategyOptions = LdapStrategyMock.mock.calls[0][0];
+    expect(strategyOptions.server.tlsOptions).toEqual({ rejectUnauthorized: true });
+  });
+
+  it('honors an explicit tlsOptions override (e.g. self-signed certs in dev/test)', () => {
+    passportLDAPSetup({ ...baseLdapConfig, tlsOptions: { rejectUnauthorized: false } });
+    const strategyOptions = LdapStrategyMock.mock.calls[0][0];
+    expect(strategyOptions.server.tlsOptions).toEqual({ rejectUnauthorized: false });
+  });
+
+  it('returns true on successful setup', () => {
+    expect(passportLDAPSetup(baseLdapConfig)).toBe(true);
+  });
+
+  it('returns false and does not throw when passport.use itself throws (e.g. malformed config)', () => {
+    useMock.mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    expect(passportLDAPSetup(baseLdapConfig)).toBe(false);
+  });
+});
 
 const groupMapping = {
   admin: 'CN=SAGE3-Admins,OU=Groups,DC=example,DC=com',
