@@ -100,6 +100,7 @@ async function localLogin(username: string, password: string): Promise<void> {
 }
 
 /**
+ * Endpoint to logout
  */
 async function logout(): Promise<void> {
   const res = await fetch('/auth/logout', {
