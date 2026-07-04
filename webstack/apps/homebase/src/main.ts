@@ -190,7 +190,11 @@ async function startServer() {
       return;
     }
 
-    SAGEBase.Auth.sessionParser(request, {}, () => {
+    // express-session's RequestHandler expects a full (Request, Response, NextFunction)
+    // triple, but this runs outside the normal Express req/res cycle — `request` here is
+    // the raw http.IncomingMessage from the 'upgrade' event, and session parsing only
+    // reads cookies off it, never touching `res`, so an empty stand-in is safe at runtime.
+    (SAGEBase.Auth.sessionParser as unknown as (req: unknown, res: unknown, next: () => void) => void)(request, {}, () => {
       let token = request.headers.authorization;
       if (config.auth.jwtConfig && token) {
         // extract the token from the header

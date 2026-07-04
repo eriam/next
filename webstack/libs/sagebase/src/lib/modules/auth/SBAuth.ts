@@ -9,7 +9,7 @@
 import { RedisClientType } from 'redis';
 import RedisStore from 'connect-redis';
 
-import { Express, NextFunction, Request, Response } from 'express';
+import { Express, NextFunction, Request, RequestHandler, Response } from 'express';
 import * as session from 'express-session';
 import * as passport from 'passport';
 
@@ -93,7 +93,7 @@ export class SBAuth {
 
   private _database!: SBAuthDatabase;
 
-  private _sessionParser!: any;
+  private _sessionParser!: RequestHandler;
 
   /**
    * Creates a generalized OAuth callback handler with enhanced error logging and security validation
@@ -284,8 +284,12 @@ export class SBAuth {
 
       // LDAP / Active Directory Setup
       if (config.strategies.includes('ldap') && config.ldapConfig) {
-        passportLDAPSetup(config.ldapConfig);
-        express.post('/auth/ldap', makeLdapAuthHandler(passport));
+        const ready = passportLDAPSetup(config.ldapConfig);
+        if (ready) {
+          express.post('/auth/ldap', makeLdapAuthHandler(passport));
+        } else {
+          console.error('LDAP> Setup failed — /auth/ldap will not be registered. Check ldapConfig in the server config.');
+        }
       }
     }
 
