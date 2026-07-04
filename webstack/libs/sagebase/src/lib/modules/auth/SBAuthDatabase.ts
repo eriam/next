@@ -156,12 +156,20 @@ export class SBAuthDatabase {
       role: extras?.role,
     } as SBAuthSchema;
     const key = provider + providerId;
-    const redisRes = await this._redisClient.json.set(`${this._prefix}:${key}`, '.', doc);
+    // NX: only write if the key doesn't already exist. Two concurrent
+    // first-time logins for the same identity can both pass findOrAddAuth's
+    // readAuth() check before either has written — without this, both would
+    // call addAuth and mint a different v4() id, with whichever write lands
+    // last silently winning and the other caller returning a stale id that
+    // no longer matches what's persisted.
+    const redisRes = await this._redisClient.json.set(`${this._prefix}:${key}`, '.', doc, { NX: true });
     if (redisRes == 'OK') {
       return doc;
-    } else {
-      return undefined;
     }
+    // NX prevented the write: another call already created this record
+    // first. Return what's actually persisted, not the one we lost the race
+    // to create.
+    return await this.readAuth(provider, providerId);
   }
 
   /**

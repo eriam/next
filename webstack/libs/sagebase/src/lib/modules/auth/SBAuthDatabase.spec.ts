@@ -25,7 +25,10 @@ function createFakeRedisClient() {
       create: async () => undefined,
     },
     json: {
-      set: async (key: string, path: string, value: unknown) => {
+      set: async (key: string, path: string, value: unknown, options?: { NX?: true; XX?: true }) => {
+        if (options?.NX && store.has(key)) {
+          return null;
+        }
         if (path === '.') {
           store.set(key, value);
         } else {
@@ -95,5 +98,18 @@ describe('SBAuthDatabase — role persistence', () => {
     await db.addAuth('ldap', 'uid=dave', { displayName: 'Dave' });
     const auth = await db.findOrAddAuth('ldap', 'uid=dave', { displayName: 'Dave', role: 'user' });
     expect(auth?.role).toBe('user');
+  });
+
+  it('addAuth does not overwrite a record that already exists (TOCTOU guard)', async () => {
+    // Simulates two concurrent first-time logins for the same identity both
+    // passing findOrAddAuth's readAuth() check before either has written,
+    // and both then calling addAuth. The second call must not silently
+    // overwrite the first's record with a different v4() id.
+    const first = await db.addAuth('ldap', 'uid=eve', { displayName: 'Eve', role: 'user' });
+    const second = await db.addAuth('ldap', 'uid=eve', { displayName: 'Eve', role: 'user' });
+    expect(second?.id).toBe(first?.id);
+    // What's actually persisted matches the winner, not the loser.
+    const persisted = await db.readAuth('ldap', 'uid=eve');
+    expect(persisted?.id).toBe(first?.id);
   });
 });
