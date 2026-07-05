@@ -40,6 +40,8 @@
     "@remotion/media-parser": "^4.0.339",
     "@turf/bbox": "^7.2.0",
     "@turf/center": "^7.2.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "ansi-to-react": "^6.1.6",
     "bullmq": "^3.12.0",
     "chakra-dayzed-datepicker": "^0.3.1",

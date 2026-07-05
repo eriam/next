@@ -6,9 +6,12 @@
  * the file LICENSE, distributed as part of this software.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Box, Button, Input, VStack, RadioGroup, Radio, Text } from '@chakra-ui/react';
-import { useAppStore, useCredentials } from '@sage3/frontend';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
+import { useAppStore, useCredentials, useUser } from '@sage3/frontend';
 import { App } from '../../schema';
 import { AppWindow } from '../../components';
 
@@ -74,18 +77,85 @@ function SetupForm(props: App): JSX.Element {
   );
 }
 
+function TerminalView(props: App): JSX.Element {
+  const s = props.data.state as AppState;
+  const { user } = useUser();
+  const updateState = useAppStore((state) => state.updateState);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+
+  const isController = s.controllerId === user?._id;
+
+  useEffect(() => {
+    const term = new Terminal({ convertEol: true });
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    if (containerRef.current) {
+      term.open(containerRef.current);
+      fitAddon.fit();
+    }
+    terminalRef.current = term;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ssh?appId=${props._id}`);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === 'output') {
+        term.write(message.data);
+      } else if (message.type === 'status') {
+        updateState(props._id, { connected: message.connected } as Partial<AppState>);
+      }
+    };
+
+    const dataDisposable = term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
+
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+    });
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
+
+    return () => {
+      dataDisposable.dispose();
+      resizeObserver.disconnect();
+      ws.close();
+      term.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props._id]);
+
+  function handleTakeControl() {
+    if (!user) return;
+    updateState(props._id, { controllerId: user._id } as Partial<AppState>);
+  }
+
+  return (
+    <Box position="relative" width="100%" height="100%">
+      <Box ref={containerRef} width="100%" height="100%" />
+      {!isController && (
+        <Button position="absolute" top={2} right={2} size="sm" onClick={handleTakeControl}>
+          Take control
+        </Button>
+      )}
+    </Box>
+  );
+}
+
 function AppComponent(props: App): JSX.Element {
   const s = props.data.state as AppState;
 
   return (
     <AppWindow app={props}>
-      {!s.host ? (
-        <SetupForm {...props} />
-      ) : (
-        <Box p={4}>
-          <Text>Terminal view — added in a later task.</Text>
-        </Box>
-      )}
+      {!s.host ? <SetupForm {...props} /> : <TerminalView {...props} />}
     </AppWindow>
   );
 }
