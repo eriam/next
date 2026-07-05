@@ -1070,22 +1070,23 @@ export function attachSSHWebSocketServer(
   const unsubscribeByApp = new Map<string, () => void>();
 
   wsServer.on('connection', async (socket, req) => {
+    // Registered FIRST, before anything else in this handler can return
+    // early or throw — Node's EventEmitter throws (crashing the whole
+    // process, not just this connection) if a socket emits 'error' with
+    // zero listeners attached, which ws sockets do on an abrupt client
+    // disconnect/TCP reset. socket.close() below still leaves a window
+    // where an error could fire during the closing handshake, so this
+    // must be attached before that call, not after it.
+    socket.on('error', () => {
+      console.log('sshWebSocketRelay> socket error');
+    });
+
     const url = new URL(req.url, 'http://localhost');
     const appId = url.searchParams.get('appId');
     if (!appId) {
       socket.close();
       return;
     }
-
-    // Node's EventEmitter throws (crashing the whole process, not just this
-    // connection) if a socket emits 'error' with zero listeners attached —
-    // ws sockets do this on an abrupt client disconnect/TCP reset. The
-    // existing apiWebSocketServer already guards against this; this relay
-    // needs the same guard, or one bad client connection can take down
-    // homebase for everyone.
-    socket.on('error', () => {
-      console.log('sshWebSocketRelay> socket error');
-    });
 
     let viewers = viewersByApp.get(appId);
     if (!viewers) {
@@ -1095,13 +1096,29 @@ export function attachSSHWebSocketServer(
     viewers.add(socket);
 
     if (!registry.getConnection(appId)) {
-      const state = await getAppState(appId);
-      await registry.connect(appId, {
-        host: state.host,
-        port: state.port,
-        ownerId: state.ownerId,
-        credentialId: state.credentialId,
-      });
+      // Caught explicitly: getAppState() throws when the app doesn't exist
+      // (see main.ts's wiring below), and this handler is itself async —
+      // an uncaught rejection here becomes an unhandled promise rejection,
+      // which main.ts's global handler turns into process.exit(1), taking
+      // down the whole server over a single bad/stale appId.
+      try {
+        const state = await getAppState(appId);
+        await registry.connect(appId, {
+          host: state.host,
+          port: state.port,
+          ownerId: state.ownerId,
+          credentialId: state.credentialId,
+        });
+      } catch (error) {
+        console.log('sshWebSocketRelay> failed to establish connection for appId', appId, error);
+        // The socket was already added to `viewers` above, before this
+        // attempt — remove it now, since the `close` handler that would
+        // normally do this cleanup isn't registered yet at this point.
+        viewers.delete(socket);
+        if (viewers.size === 0) viewersByApp.delete(appId);
+        socket.close();
+        return;
+      }
     }
 
     if (!unsubscribeByApp.has(appId)) {
@@ -2017,6 +2034,6 @@ git commit -m "feat(ssh-terminal): add xterm.js terminal view, WebSocket client,
 3. **Found during Task 3's actual implementation, not caught in this plan's own self-review pass — corrected here after the fact.** `attachSSHWebSocketServer`'s original reference implementation called `registry.onOutput(appId, listener)` once per connecting socket, with `listener` closed over that one socket. This doesn't broadcast to "every viewer" at all: each subscription's callback can only reach the one socket it closed over, so a second viewer's own subscription can never deliver output to the first viewer's socket. The corrected version (shown above) uses one shared `viewersByApp: Map<appId, Set<WebSocket>>`, subscribes to `registry.onOutput`/`onStatus` only for the first viewer of a given `appId`, and fans out to every socket currently in that appId's Set — later viewers ride along on the existing subscription instead of getting their own. The task's own test (already shown above, unchanged) actually caught this: it registers two viewers and asserts both receive a broadcast triggered through `registry.onOutput`'s first recorded call, which only passes under the shared-subscription design.
 4. **Found during Task 3's task review, not this plan's own self-review pass — corrected here after the fact.** The originally-planned client-facing route, `/api/ssh/terminal`, could never actually work: `main.ts`'s WS upgrade dispatcher routes purely on the URL's first path segment, so anything starting `/api/...` is always claimed by the existing authenticated API WebSocket handler before a nested `ssh` segment could ever be inspected — real SSH-terminal traffic would have been silently misrouted into `apiWebSocketServer`'s unrelated message parser. Corrected throughout (spec, plan Architecture summary, Task 3's `main.ts` wiring, and Task 5's frontend WebSocket URL/test) to a top-level `/ssh?appId=...` path, a sibling of `/api` and `/logs`, not nested under either.
 5. **Also found during Task 3's task review.** The same route also exposed a second, independent bug: `main.ts`'s existing `wsPath = pathname.split('/')[1]` extraction never accounted for a query string, because `/api`/`/logs` never carried one — but `/ssh` genuinely needs `?appId=...`, and `pathname.split('/')[1]` on `/ssh?appId=app-5` yields `"ssh?appId=app-5"`, not `"ssh"`. Task 3's Step 5 now includes an explicit one-line fix to the existing extraction (stripping the query string before splitting) alongside adding the new branch, with an explanation of why `/api`/`/logs` are unaffected by the change.
-6. **Also found during Task 3's task review.** `attachSSHWebSocketServer`'s connection handler registered `message`/`close` listeners but no `error` listener — Node's `EventEmitter` throws (crashing the entire homebase process, not just the one connection) when a `ws` socket emits `'error'` with zero listeners attached, which happens on an abrupt client disconnect/TCP reset. The existing `apiWebSocketServer` pattern already guards against exactly this; Task 3's implementation code now includes the same `socket.on('error', ...)` guard.
+6. **Also found during Task 3's task review, then refined once more after a re-review caught an incomplete first pass.** `attachSSHWebSocketServer`'s connection handler registered `message`/`close` listeners but no `error` listener — Node's `EventEmitter` throws (crashing the entire homebase process, not just the one connection) when a `ws` socket emits `'error'` with zero listeners attached, which happens on an abrupt client disconnect/TCP reset. The first fix attached the guard AFTER the `appId`-missing early return, leaving exactly that narrow case (connecting with no `appId`) still unguarded — a re-review caught this. The guard is now the very first statement in the connection handler, before any early return can happen. While fixing this, also caught and fixed a second, related crash path: the initial `getAppState`/`registry.connect` call was unguarded async work inside an `async` connection handler — an uncaught rejection there (e.g. `getAppState` throwing because the app doesn't exist) becomes an unhandled promise rejection, which `main.ts`'s global handler turns into `process.exit(1)`, crashing the whole server over one bad `appId`. Now wrapped in try/catch, with matching cleanup of the `viewers` Set (the socket was already added to it before the attempt, and the `close` handler that would normally clean it up isn't registered yet at that point).
 
 **Known gap, deliberately left for a human decision rather than guessed at:** none — all six gaps found (above) were resolved by checking the actual source/tests rather than left open.
