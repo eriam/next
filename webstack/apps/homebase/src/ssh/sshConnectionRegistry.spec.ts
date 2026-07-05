@@ -47,6 +47,19 @@ class FakeClient extends EventEmitter {
   }
 }
 
+// The installed jest version (28) doesn't have the async fake-timer helpers
+// (advanceTimersByTimeAsync etc. arrived in jest 29) — advanceTimersByTime()
+// itself is synchronous and only runs due timer callbacks, it doesn't also
+// drain the microtask queue that the resulting promise continuations queue
+// up onto. So every advance is followed by a few plain microtask flushes to
+// let those continuations (which are themselves synchronous up to the next
+// await) actually run before assertions.
+async function flushMicrotasks(times = 5) {
+  for (let i = 0; i < times; i++) {
+    await Promise.resolve();
+  }
+}
+
 let fakeClients: FakeClient[] = [];
 
 jest.mock('ssh2', () => ({
@@ -267,7 +280,7 @@ describe('SSHConnectionRegistry', () => {
     expect(registry.getConnection('app-10')).toBeUndefined();
   });
 
-  it('reconnecting after a remote stream close passes through whatever ownerId parameter connect() is given, consistently across calls', async () => {
+  it('reconnecting after retries are exhausted passes through whatever ownerId parameter connect() is given, consistently across calls', async () => {
     // This is a correctness/passthrough test, not a security-boundary test:
     // it proves connect() forwards its `ownerId` parameter to
     // SBCredentialsDB.getDecryptedValue unchanged on repeated calls. It does
@@ -276,22 +289,197 @@ describe('SSHConnectionRegistry', () => {
     // about where that value comes from (see class doc comment). The actual
     // guarantee that a reconnect uses the app's persisted owner rather than a
     // triggering browser session's identity is enforced by the caller
-    // (Task 3's WebSocket relay), not by this module.
+    // (the WebSocket relay), not by this module.
+    //
+    // Updated for Finding 4 (automatic reconnect with a retry budget): a
+    // stream close no longer removes the connection immediately — it now
+    // stays registered (in a "retrying" state) until the retry budget is
+    // exhausted. So this test drives the retry loop to exhaustion first,
+    // then exercises the ownerId passthrough on the manual reconnect that
+    // follows, same as before.
+    jest.useFakeTimers({ doNotFake: ['performance'] });
+    try {
+      (SBCredentialsDB.getDecryptedValue as jest.Mock).mockResolvedValue({
+        type: 'sshPrivateKey',
+        username: 'u',
+        privateKey: 'key',
+      });
+      await connectAndEmitReady('app-11', { host: 'h', port: 22, ownerId: 'owner-user', credentialId: 'cred-1' });
+
+      // Simulate the remote stream closing unexpectedly (network blip), and
+      // drive the automatic retry loop through every attempt failing until
+      // the retry budget is exhausted and the connection is removed.
+      fakeClients[0].lastStream!.emit('close');
+      for (const backoffMs of [1000, 2000, 4000]) {
+        jest.advanceTimersByTime(backoffMs);
+        await flushMicrotasks();
+        fakeClients[fakeClients.length - 1].emit('error', new Error('ECONNREFUSED'));
+        await flushMicrotasks();
+      }
+      expect(registry.getConnection('app-11')).toBeUndefined();
+
+      // A later reconnect call with the same ownerId parameter must pass it
+      // through to SBCredentialsDB.getDecryptedValue unchanged.
+      (SBCredentialsDB.getDecryptedValue as jest.Mock).mockClear();
+      await connectAndEmitReady('app-11', { host: 'h', port: 22, ownerId: 'owner-user', credentialId: 'cred-1' });
+      expect(SBCredentialsDB.getDecryptedValue).toHaveBeenCalledWith('cred-1', 'owner-user');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('dedups concurrent connect() calls for the same not-yet-connected appId into a single ssh2.Client', async () => {
     (SBCredentialsDB.getDecryptedValue as jest.Mock).mockResolvedValue({
       type: 'sshPrivateKey',
       username: 'u',
       privateKey: 'key',
     });
-    await connectAndEmitReady('app-11', { host: 'h', port: 22, ownerId: 'owner-user', credentialId: 'cred-1' });
 
-    // Simulate the remote stream closing unexpectedly (network blip).
-    fakeClients[0].lastStream!.emit('close');
-    expect(registry.getConnection('app-11')).toBeUndefined();
+    const params = { host: 'h', port: 22, ownerId: 'user-1', credentialId: 'cred-1' };
+    // Two viewers racing to connect the same brand-new appId — neither
+    // await is resolved before the second call starts.
+    const firstPromise = registry.connect('app-12', params);
+    const secondPromise = registry.connect('app-12', params);
 
-    // A later reconnect call with the same ownerId parameter must pass it
-    // through to SBCredentialsDB.getDecryptedValue unchanged.
-    (SBCredentialsDB.getDecryptedValue as jest.Mock).mockClear();
-    await connectAndEmitReady('app-11', { host: 'h', port: 22, ownerId: 'owner-user', credentialId: 'cred-1' });
-    expect(SBCredentialsDB.getDecryptedValue).toHaveBeenCalledWith('cred-1', 'owner-user');
+    // Only one FakeClient should have been constructed for this appId.
+    expect(fakeClients.length).toBe(1);
+
+    fakeClients[0].emit('ready');
+
+    const [firstResult, secondResult] = await Promise.all([firstPromise, secondPromise]);
+    expect(firstResult).toEqual({ success: true });
+    expect(secondResult).toEqual({ success: true });
+    expect(fakeClients.length).toBe(1);
+    expect(registry.getConnection('app-12')).toBeDefined();
+  });
+
+  describe('automatic reconnect on an unexpected drop', () => {
+    beforeEach(() => {
+      // doNotFake: ['performance'] works around a @sinonjs/fake-timers
+      // incompatibility with newer Node versions, where `performance` is a
+      // non-configurable global and hijacking it throws
+      // "Cannot assign to read only property 'performance'" /
+      // "Can't install fake timers twice on the same global object." This
+      // repo's tests don't otherwise use fake timers, so there's no
+      // existing convention to match here.
+      jest.useFakeTimers({ doNotFake: ['performance'] });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('broadcasts {connected: false} immediately, then retries and broadcasts {connected: true} on success', async () => {
+      (SBCredentialsDB.getDecryptedValue as jest.Mock).mockResolvedValue({
+        type: 'sshPrivateKey',
+        username: 'u',
+        privateKey: 'key',
+      });
+
+      const connectPromise = registry.connect('app-13', { host: 'h', port: 22, ownerId: 'user-1', credentialId: 'cred-1' });
+      fakeClients[0].emit('ready');
+      await connectPromise;
+
+      const statuses: Array<{ connected: boolean; error?: string }> = [];
+      registry.onStatus('app-13', (status) => statuses.push(status));
+
+      // Simulate an unexpected drop (not a disconnect() call).
+      fakeClients[0].lastStream!.emit('close');
+
+      expect(statuses).toEqual([{ connected: false }]);
+      expect(fakeClients.length).toBe(1); // no retry attempt yet — still waiting on backoff
+
+      // Advance through the first backoff delay so the retry attempt fires.
+      jest.advanceTimersByTime(1000);
+      await flushMicrotasks();
+      expect(fakeClients.length).toBe(2);
+
+      fakeClients[1].emit('ready');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(statuses).toEqual([{ connected: false }, { connected: true }]);
+      expect(registry.getConnection('app-13')).toBeDefined();
+    });
+
+    it('gives up after exhausting the retry budget and broadcasts a final failure status', async () => {
+      (SBCredentialsDB.getDecryptedValue as jest.Mock).mockResolvedValue({
+        type: 'sshPrivateKey',
+        username: 'u',
+        privateKey: 'key',
+      });
+
+      const connectPromise = registry.connect('app-14', { host: 'h', port: 22, ownerId: 'user-1', credentialId: 'cred-1' });
+      fakeClients[0].emit('ready');
+      await connectPromise;
+
+      const statuses: Array<{ connected: boolean; error?: string }> = [];
+      registry.onStatus('app-14', (status) => statuses.push(status));
+
+      fakeClients[0].lastStream!.emit('close');
+      expect(statuses).toEqual([{ connected: false }]);
+
+      // Attempt 1: fails after 1000ms backoff.
+      jest.advanceTimersByTime(1000);
+      await flushMicrotasks();
+      expect(fakeClients.length).toBe(2);
+      fakeClients[1].emit('error', new Error('ECONNREFUSED'));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Attempt 2: fails after 2000ms backoff.
+      jest.advanceTimersByTime(2000);
+      await flushMicrotasks();
+      expect(fakeClients.length).toBe(3);
+      fakeClients[2].emit('error', new Error('ECONNREFUSED'));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Attempt 3: fails after 4000ms backoff — retry budget now exhausted.
+      jest.advanceTimersByTime(4000);
+      await flushMicrotasks();
+      expect(fakeClients.length).toBe(4);
+      fakeClients[3].emit('error', new Error('ECONNREFUSED'));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(statuses).toEqual([{ connected: false }, { connected: false, error: 'unreachable' }]);
+      expect(registry.getConnection('app-14')).toBeUndefined();
+    });
+
+    it('does not retry after a deliberate disconnect()', async () => {
+      (SBCredentialsDB.getDecryptedValue as jest.Mock).mockResolvedValue({
+        type: 'sshPrivateKey',
+        username: 'u',
+        privateKey: 'key',
+      });
+
+      const connectPromise = registry.connect('app-15', { host: 'h', port: 22, ownerId: 'user-1', credentialId: 'cred-1' });
+      fakeClients[0].emit('ready');
+      await connectPromise;
+
+      expect(fakeClients.length).toBe(1);
+      const stream = fakeClients[0].lastStream!;
+
+      registry.disconnect('app-15');
+      expect(registry.getConnection('app-15')).toBeUndefined();
+
+      // In real ssh2, ending the client eventually causes its stream to
+      // emit 'close' too — simulate that here to exercise the
+      // deliberatelyClosed guard in wireStream's own 'close' handler
+      // (rather than trivially passing just because FakeClient.end()
+      // happens not to touch the stream).
+      stream.emit('close');
+
+      // Advance well past every possible backoff delay — no retry should
+      // ever fire because the deliberate-close path skips the retry loop.
+      jest.advanceTimersByTime(10000);
+      await flushMicrotasks();
+
+      expect(fakeClients.length).toBe(1);
+      expect(registry.getConnection('app-15')).toBeUndefined();
+    });
   });
 });

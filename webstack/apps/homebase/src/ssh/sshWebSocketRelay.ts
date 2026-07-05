@@ -71,12 +71,28 @@ export function attachSSHWebSocketServer(
     if (!registry.getConnection(appId)) {
       try {
         const state = await getAppState(appId);
-        await registry.connect(appId, {
+        const result = await registry.connect(appId, {
           host: state.host,
           port: state.port,
           ownerId: state.ownerId,
           credentialId: state.credentialId,
         });
+        if (!result.success) {
+          // registry.connect() never rejects — it always resolves, even on
+          // failure. Treat a resolved failure identically to the catch
+          // block below: report status and bail out BEFORE the subscribe
+          // block runs. Falling through here would still register a
+          // subscription in unsubscribeByApp even though there's no real
+          // connection to subscribe to (onOutput/onStatus return no-op
+          // unsubscribes when getConnection() is undefined), which would
+          // permanently poison that appId's subscription for every future
+          // viewer via the `!unsubscribeByApp.has(appId)` guard below.
+          send(socket, { type: 'status', connected: false, error: result.error });
+          viewers.delete(socket);
+          if (viewers.size === 0) viewersByApp.delete(appId);
+          socket.close();
+          return;
+        }
       } catch (error) {
         console.log('sshWebSocketRelay> failed to establish connection for appId', appId, error);
         // The socket was already added to the viewers Set before this
@@ -131,6 +147,10 @@ export function attachSSHWebSocketServer(
         viewersByApp.delete(appId);
         unsubscribeByApp.get(appId)?.();
         unsubscribeByApp.delete(appId);
+        // No one is watching this app instance's terminal anymore — tear
+        // down the shared SSH/tmux connection rather than leaving it open
+        // for the lifetime of the homebase process.
+        registry.disconnect(appId);
       }
     });
   });
