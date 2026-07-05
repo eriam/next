@@ -54,7 +54,13 @@ class SBCredentialsDatabase {
     await this._redisClient.connect();
 
     this._prefix = prefix + ':CREDENTIALS';
-    this._indexName = 'idx:credentials';
+    // Derived from the prefix, not a fixed constant — two SBCredentialsDatabase
+    // instances against the same Redis with different prefixes (as happens
+    // whenever more than one test file initializes its own instance) would
+    // otherwise silently share and clobber one index, causing real,
+    // non-deterministic "Index already exists" / cross-instance query
+    // flakiness when their test runs overlap.
+    this._indexName = `idx:${prefix}:credentials`;
     this._encryptionKey = deriveEncryptionKey(encryptionKey);
     await this.createIndex();
   }
