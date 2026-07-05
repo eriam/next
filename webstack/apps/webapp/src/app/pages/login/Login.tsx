@@ -9,14 +9,22 @@
 import { useEffect, useCallback, useState } from 'react';
 
 import {
-  Button, ButtonGroup, IconButton, Box, useColorMode, Image, Text, VStack, useToast,
-  Input, FormControl, FormLabel, InputGroup, InputRightElement,
+  Button,
+  ButtonGroup,
+  IconButton,
+  Box,
+  useColorMode,
+  Image,
+  Text,
+  VStack,
+  useToast,
+  Input,
+  FormControl,
 } from '@chakra-ui/react';
 
 import { FcGoogle } from 'react-icons/fc';
-import { FaGhost, FaApple, FaLock } from 'react-icons/fa';
+import { FaGhost, FaApple, FaServer } from 'react-icons/fa';
 import { SiKeycloak } from 'react-icons/si';
-import { MdLogin } from 'react-icons/md';
 
 import { isElectron, useAuth, useRouteNav, GetServerInfo } from '@sage3/frontend';
 
@@ -27,7 +35,7 @@ import cilogonLogo from '../../../assets/cilogon.png';
  * Login page with authentication options and board context handling
  */
 export function LoginPage() {
-  const { auth, googleLogin, appleLogin, ciLogin, keycloakLogin, guestLogin, spectatorLogin, localLogin, loading: authLoading } = useAuth();
+  const { auth, googleLogin, appleLogin, ciLogin, keycloakLogin, guestLogin, spectatorLogin, loading: authLoading } = useAuth();
   const { toCreateUser } = useRouteNav();
   const toast = useToast();
   const [serverName, setServerName] = useState<string>('');
@@ -186,6 +194,10 @@ export function LoginPage() {
           title = 'Keycloak OAuth Error';
           description = 'Keycloak returned an authentication error. Please try again.';
           break;
+        case 'ldap_failed':
+          title = 'LDAP Login Failed';
+          description = 'Invalid username or password, or the directory could not be reached. Please try again.';
+          break;
         default:
           title = 'Authentication Error';
           description = `Unknown authentication error: ${error}`;
@@ -275,35 +287,13 @@ export function LoginPage() {
     authNavCheck();
   }, [authNavCheck]);
 
-  const [ldapUsername, setLdapUsername] = useState('');
-  const [ldapPassword, setLdapPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [ldapLoading, setLdapLoading] = useState(false);
-
-  const handleLdapLogin = async () => {
-    if (!ldapUsername || !ldapPassword) return;
-    setLdapLoading(true);
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/auth/ldap';
-    const u = document.createElement('input');
-    u.name = 'username';
-    u.value = ldapUsername;
-    const p = document.createElement('input');
-    p.name = 'password';
-    p.value = ldapPassword;
-    form.appendChild(u);
-    form.appendChild(p);
-    document.body.appendChild(form);
-    form.submit();
-  };
-
   const { colorMode } = useColorMode();
 
   const isGoogle = !shouldDisable && logins.includes('google');
   const isApple = !shouldDisable && logins.includes('apple');
   const isCILogon = !shouldDisable && logins.includes('cilogon');
   const isKeycloak = !shouldDisable && logins.includes('keycloak');
+  const isLdap = !shouldDisable && logins.includes('ldap');
 
   return (
     <Box display="flex" flexDir={'column'} justifyContent="center" alignItems="center" width="100%" height="100%" position="relative">
@@ -424,63 +414,42 @@ export function LoginPage() {
             </ButtonGroup>
           )}
 
-          {/* LDAP / Active Directory Login */}
-          {logins.includes('ldap') && (
-            <VStack spacing={2} width="100%">
-              <FormControl>
-                <FormLabel fontSize="sm">Username</FormLabel>
-                <InputGroup>
+          {/* LDAP / Active Directory Auth Service */}
+          {isLdap && (
+            // Plain HTML form submission (not a fetch call): the server
+            // responds with a redirect on both success ('/') and failure
+            // ('/?error=ldap_failed'), matching the OAuth-style flow every
+            // other provider above already uses — the browser follows it
+            // natively, no client-side response handling needed.
+            <Box as="form" action="/auth/ldap" method="POST" width="100%">
+              <VStack spacing={2} width="100%">
+                <FormControl>
+                  <Input name="username" placeholder="Username" autoComplete="username" isDisabled={shouldDisable} />
+                </FormControl>
+                <FormControl>
                   <Input
-                    placeholder="username"
-                    value={ldapUsername}
-                    onChange={(e) => setLdapUsername(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLdapLogin()}
-                    autoComplete="username"
-                  />
-                </InputGroup>
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize="sm">Password</FormLabel>
-                <InputGroup>
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="password"
-                    value={ldapPassword}
-                    onChange={(e) => setLdapPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLdapLogin()}
+                    name="password"
+                    type="password"
+                    placeholder="Password"
                     autoComplete="current-password"
+                    isDisabled={shouldDisable}
                   />
-                  <InputRightElement>
-                    <IconButton
-                      aria-label="Show password"
-                      icon={<FaLock />}
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setShowPassword(!showPassword)}
-                    />
-                  </InputRightElement>
-                </InputGroup>
-              </FormControl>
-              <ButtonGroup isAttached size="lg" width="100%">
-                <IconButton
-                  width="80px"
-                  aria-label="Login with AD"
-                  icon={<MdLogin size="26" />}
-                  pointerEvents="none"
-                  borderRight={`3px solid`}
-                  borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
-                />
-                <Button
-                  width="100%"
-                  justifyContent="left"
-                  isLoading={ldapLoading}
-                  isDisabled={shouldDisable || !ldapUsername || !ldapPassword}
-                  onClick={handleLdapLogin}
-                >
-                  Login with AD
-                </Button>
-              </ButtonGroup>
-            </VStack>
+                </FormControl>
+                <ButtonGroup isAttached size="lg" width="100%">
+                  <IconButton
+                    width="80px"
+                    aria-label="Login with LDAP"
+                    icon={<FaServer size="26" />}
+                    pointerEvents="none"
+                    borderRight={`3px solid`}
+                    borderColor={colorMode === 'light' ? 'gray.50' : 'gray.800'}
+                  />
+                  <Button width="100%" type="submit" isDisabled={shouldDisable} justifyContent="left">
+                    Login with LDAP
+                  </Button>
+                </ButtonGroup>
+              </VStack>
+            </Box>
           )}
 
           {/* Guest Auth Service */}

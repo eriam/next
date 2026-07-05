@@ -75,7 +75,10 @@ export function passportLDAPSetup(config: SBAuthLDAPConfig): boolean {
             searchBase: config.searchBase,
             searchFilter: config.searchFilter,
             searchAttributes: ['dn', 'uid', 'cn', 'mail', 'displayName', 'memberOf', 'jpegPhoto', 'sAMAccountName'],
-            tlsOptions: config.tlsOptions || { rejectUnauthorized: false },
+            // Default to verifying the LDAP server's TLS certificate. Operators
+            // must explicitly opt into rejectUnauthorized: false (self-signed
+            // certs in dev/test) rather than getting it silently.
+            tlsOptions: config.tlsOptions || { rejectUnauthorized: true },
           },
         },
         async (ldapUser: LdapUserProfile, done: (err: Error | null, user?: Express.User | false) => void) => {

@@ -49,63 +49,23 @@ Use the `Build-Push` script to build all service images and push to GHCR:
 
 ## Authentication
 
-SAGE3 supports multiple login strategies configured in `sage3.hjson` (or `sage3-dev.hjson` for development) under the `auth` key. Enable strategies by adding them to the `strategies` array and providing the matching config block.
+Login strategies are enabled in `webstack/sage3-dev.hjson` (or `sage3-prod.hjson`) under `auth.strategies`. Each strategy has a matching `*Config` block right below it in that same file, with inline documentation for every field.
 
-### Available strategies
-
-| Strategy | Description |
+| Strategy | Notes |
 |---|---|
-| `guest` | Anonymous login, read-only access to apps |
-| `spectator` | Anonymous login, full read-only |
-| `jwt` | Token-based login via signed JWT |
-| `google` | OAuth via Google |
-| `apple` | OAuth via Apple |
-| `cilogon` | Federated login via CILogon |
-| `keycloak` | OIDC via Keycloak (or any compatible OIDC provider) |
-| `ldap` | Username/password login against an LDAP/Active Directory server |
+| `guest` | No credentials; read-only access. |
+| `google`, `apple`, `cilogon`, `keycloak` | OAuth/OIDC redirect flows; each needs its own client registration. |
+| `jwt` | For programmatic/service clients — see `jwtConfig`. |
+| `spectator` | Read-only shared login, no per-user identity. |
+| `ldap` | LDAP/Active Directory username+password, with group→role mapping. See below. |
 
 ### LDAP / Active Directory
 
-Add `"ldap"` to `strategies` and configure `ldapConfig`:
+Add `"ldap"` to `auth.strategies` and fill in `ldapConfig` (URL, service-account bind credentials, search base/filter, and a `groupMapping` from LDAP group DNs to SAGE3 roles). Users log in with the username/password form on the login page, which submits to `POST /auth/ldap`.
 
-```hjson
-"ldapConfig": {
-  // Plain LDAP (port 389) or LDAPS (port 636)
-  "url": "ldap://ad.university.edu:389",
+`groupMapping` is checked in priority order (`admin` > `user` > `spectator`); a user matching no group gets `defaultRole`. The mapping is re-evaluated on every login, so removing someone from an LDAP group takes effect the next time they sign in — not just at first login.
 
-  // Service account with read access to the user tree
-  "bindDN": "cn=svc-sage3,ou=ServiceAccounts,dc=university,dc=edu",
-  "bindCredentials": "secret",
-
-  // Base DN to search for users
-  "searchBase": "ou=People,dc=university,dc=edu",
-
-  // Filter to locate the user — {{username}} is replaced at login time
-  // OpenLDAP:         "(uid={{username}})"
-  // Active Directory: "(sAMAccountName={{username}})"
-  "searchFilter": "(sAMAccountName={{username}})",
-
-  // Map LDAP group DNs to SAGE3 roles (priority: admin > user > spectator)
-  // Groups are read from the "memberOf" attribute on the user entry.
-  "groupMapping": {
-    "admin":     "cn=sage3-admins,ou=groups,dc=university,dc=edu",
-    "user":      "cn=sage3-users,ou=groups,dc=university,dc=edu",
-    "spectator": "cn=sage3-readonly,ou=groups,dc=university,dc=edu"
-  },
-
-  // Role assigned when the user matches no group above
-  "defaultRole": "spectator",
-
-  // TLS options — set rejectUnauthorized: true in production
-  "tlsOptions": { "rejectUnauthorized": false }
-}
-```
-
-Users log in via the username/password form on the SAGE3 login page. Credentials are sent to `POST /auth/ldap`.
-
-### Guest permissions
-
-Guests (`guest` strategy) can read all content but cannot create or modify apps. They can update their own presence and user profile.
+To try this against a real (disposable) LDAP server without touching your own directory, see [`test-ldap/README.md`](./test-ldap/README.md) — it seeds a local OpenLDAP container with four test accounts covering all three role mappings.
 
 ## More
 

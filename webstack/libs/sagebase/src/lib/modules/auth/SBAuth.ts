@@ -16,7 +16,6 @@ import * as passport from 'passport';
 import { SBAuthDatabase, SBAuthDB, SBAuthSchema } from './SBAuthDatabase';
 export type { SBAuthSchema } from './SBAuthDatabase';
 export type { JWTPayload } from './adapters';
-import { Strategy as LocalStrategy } from 'passport-local';
 import {
   passportGoogleSetup,
   SBAuthGoogleConfig,
@@ -28,8 +27,6 @@ import {
   SBAuthGuestConfig,
   passportCILogonSetup,
   SBAuthCILogonConfig,
-  passportLocalSetup,
-  SBAuthLocalConfig,
   passportSpectatorSetup,
   SBAuthSpectatorConfig,
   passportKeycloakSetup,
@@ -42,18 +39,44 @@ import {
 export type SBAuthConfig = {
   sessionMaxAge: number;
   sessionSecret: string;
-  strategies: ('google' | 'apple' | 'cilogon' | 'guest' | 'jwt' | 'spectator' | 'keycloak' | 'local' | 'ldap')[];
+  strategies: ('google' | 'apple' | 'cilogon' | 'guest' | 'jwt' | 'spectator' | 'keycloak' | 'ldap')[];
   production: boolean;
   googleConfig?: SBAuthGoogleConfig;
   appleConfig?: SBAuthAppleConfig;
   jwtConfig?: SBAuthJWTConfig;
   guestConfig?: SBAuthGuestConfig;
   cilogonConfig?: SBAuthCILogonConfig;
-  localConfig?: SBAuthLocalConfig;
-  ldapConfig?: SBAuthLDAPConfig;
   spectatorConfig?: SBAuthSpectatorConfig;
   keycloakConfig?: SBAuthKeycloakConfig;
+  ldapConfig?: SBAuthLDAPConfig;
 };
+
+type LdapAuthenticator = { authenticate: typeof passport.authenticate };
+
+/**
+ * Route handler for POST /auth/ldap. Exported standalone (rather than
+ * defined inline where it's registered) so it can be tested directly
+ * against a real Express app via supertest.
+ */
+export function makeLdapAuthHandler(passportInstance: LdapAuthenticator) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    passportInstance.authenticate('ldapauth', (err: Error | null, user: Express.User | false) => {
+      // ldapauth-fork can emit a late connection 'error' after we've already
+      // responded (e.g. on connection teardown), which re-invokes this callback.
+      // Guard against a double response that otherwise throws
+      // "Cannot set headers after they are sent to the client".
+      if (res.headersSent) return;
+      if (err || !user) {
+        return res.redirect('/?error=ldap_failed');
+      }
+      req.logIn(user, (loginErr: Error) => {
+        if (res.headersSent) return;
+        if (loginErr) return next(loginErr);
+        return res.redirect('/');
+      });
+    })(req, res, next);
+  };
+}
 
 /**
  * The SBAuth instance.
@@ -228,51 +251,14 @@ export class SBAuth {
           express.get(config.keycloakConfig.callbackURL, this.createOAuthCallbackHandler('keycloak', 'keycloak'));
         }
       }
-      // LDAP Auth Setup
+
+      // LDAP / Active Directory Setup
       if (config.strategies.includes('ldap') && config.ldapConfig) {
-        passportLDAPSetup(config.ldapConfig);
-        // Register a dedicated /auth/ldap route when local is not enabled
-        if (!config.strategies.includes('local')) {
-          express.post('/auth/ldap', (req: Request, res: Response, next: NextFunction) => {
-            passport.authenticate('ldapauth', (err: Error | null, user: Express.User | false) => {
-              if (err || !user) {
-                return res.redirect('/?error=ldap_failed');
-              }
-              req.logIn(user, (loginErr: Error) => {
-                if (loginErr) return next(loginErr);
-                return res.redirect('/');
-              });
-            })(req, res, next);
-          });
-        }
-      }
-
-      // Local Auth Setup (with optional LDAP chaining)
-      if (config.strategies.includes('local') && config.localConfig) {
-        if (passportLocalSetup()) {
-          const localEndpoint = config.localConfig.routeEndpoint;
-          const ldapEnabled = config.strategies.includes('ldap') && config.ldapConfig;
-
-          if (ldapEnabled) {
-            // Chain: try LDAP first, fall back to local
-            express.post(localEndpoint, (req: Request, res: Response, next: NextFunction) => {
-              passport.authenticate('ldapauth', (err: Error | null, user: Express.User | false) => {
-                if (user) {
-                  // LDAP auth succeeded
-                  req.logIn(user, (loginErr: Error) => {
-                    if (loginErr) return next(loginErr);
-                    return res.redirect('/');
-                  });
-                } else {
-                  // LDAP failed, try local
-                  passport.authenticate('local', { successRedirect: '/', failureRedirect: '/' })(req, res, next);
-                }
-              })(req, res, next);
-            });
-          } else {
-            // Local only
-            express.post(localEndpoint, passport.authenticate('local', { successRedirect: '/', failureRedirect: '/' }));
-          }
+        const ready = passportLDAPSetup(config.ldapConfig);
+        if (ready) {
+          express.post('/auth/ldap', makeLdapAuthHandler(passport));
+        } else {
+          console.error('LDAP> Setup failed — /auth/ldap will not be registered. Check ldapConfig in the server config.');
         }
       }
     }
