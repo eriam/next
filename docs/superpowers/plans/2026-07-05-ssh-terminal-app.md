@@ -4,7 +4,7 @@
 
 **Goal:** Give SAGE3 a native app that opens an interactive terminal to a remote host over SSH, attached to a persistent `tmux` session, shared collaboratively by everyone viewing the board — the first real consumer of the credentials store's `sshPrivateKey` credential type.
 
-**Architecture:** Homebase holds one long-lived SSH connection per app instance (via the `ssh2` npm library, with `tmux new -A -s sage3-<appId>` as the remote command — tmux itself runs on the far end, so no local PTY library is needed). A first-party integration handler (`POST /api/integrations/ssh/connect`, mirroring the existing `ctfd` handler) establishes the connection; a dedicated WebSocket route (`/api/ssh/terminal`, alongside the existing `apiWebSocketServer`/`logsServer` pattern) relays output to every viewer and accepts input only from the current controller. The frontend is a native SAGE3 app rendering `@xterm/xterm`.
+**Architecture:** Homebase holds one long-lived SSH connection per app instance (via the `ssh2` npm library, with `tmux new -A -s sage3-<appId>` as the remote command — tmux itself runs on the far end, so no local PTY library is needed). A first-party integration handler (`POST /api/integrations/ssh/connect`, mirroring the existing `ctfd` handler) establishes the connection; a dedicated WebSocket route (`/ssh`, alongside the existing `apiWebSocketServer`/`logsServer` pattern — a top-level path, not nested under `/api/`, since homebase's upgrade dispatcher routes purely on the first path segment and `/api/...` would always be claimed by the existing API WebSocket handler first) relays output to every viewer and accepts input only from the current controller. The frontend is a native SAGE3 app rendering `@xterm/xterm`.
 
 **Tech Stack:** TypeScript, `ssh2` (Node SSH client, PTY allocation is a protocol-level SSH feature it handles natively — no `node-pty` needed), `@xterm/xterm` + `@xterm/addon-fit` (browser terminal emulator), Express, `ws` (already used throughout homebase), Jest + ts-jest (unit tests with a mocked `ssh2.Client`, real Express + supertest for the REST handler), React Testing Library + Vitest-equivalent Jest setup already configured for `libs/applications`.
 
@@ -856,7 +856,7 @@ git commit -m "feat(ssh-terminal): add first-party ssh integration handler (POST
 
 ---
 
-### Task 3: WebSocket route — `/api/ssh/terminal`
+### Task 3: WebSocket route — `/ssh`
 
 **Files:**
 - Modify: `webstack/apps/homebase/src/main.ts`
@@ -1077,6 +1077,16 @@ export function attachSSHWebSocketServer(
       return;
     }
 
+    // Node's EventEmitter throws (crashing the whole process, not just this
+    // connection) if a socket emits 'error' with zero listeners attached —
+    // ws sockets do this on an abrupt client disconnect/TCP reset. The
+    // existing apiWebSocketServer already guards against this; this relay
+    // needs the same guard, or one bad client connection can take down
+    // homebase for everyone.
+    socket.on('error', () => {
+      console.log('sshWebSocketRelay> socket error');
+    });
+
     let viewers = viewersByApp.get(appId);
     if (!viewers) {
       viewers = new Set();
@@ -1179,6 +1189,24 @@ After the existing `logsServer.on('connection', ...)` block, wire the SSH relay.
     return { host: state.host, port: state.port, ownerId: state.ownerId, credentialId: state.credentialId, controllerId: state.controllerId };
   });
 ```
+
+**A routing bug to fix in the existing code, not just a new branch to add.** Find the existing `wsPath` extraction inside `server.on('upgrade', ...)`:
+```typescript
+    const pathname = request.url;
+    if (!pathname) return;
+    // get the first word of the url
+    const wsPath = pathname.split('/')[1];
+```
+`request.url` includes the query string (e.g. `/ssh?appId=app-5`), and `/ssh` genuinely needs `?appId=...` — unlike `/api`/`/logs`, which have never carried one, so this was never previously exposed. `pathname.split('/')[1]` on `/ssh?appId=app-5` gives `"ssh?appId=app-5"`, not `"ssh"` — `wsPath === 'ssh'` would never match, and the connection would hang unupgraded. Fix the extraction to strip the query string first:
+```typescript
+    const pathname = request.url;
+    if (!pathname) return;
+    // get the first path segment of the url, ignoring any query string
+    const wsPath = pathname.split('?')[0].split('/')[1];
+```
+This is a one-line change to an existing line, not a new branch — `/api` and `/logs` behave identically before and after (neither ever had a query string to strip), and `/ssh?appId=...` now correctly extracts `wsPath === 'ssh'`.
+
+**The route is a top-level `/ssh` path, not nested under `/api/`.** This dispatcher only ever inspects the FIRST path segment — a client connecting to `/api/ssh/terminal?appId=...` would always match the existing `wsPath === 'api'` branch first (silently misrouting SSH relay traffic into the unrelated `apiWebSocketServer`/`wsAPIRouter` message parser), regardless of the query-string fix above. The client (Task 5's frontend) must connect to `/ssh?appId=...` instead — a sibling of `/api` and `/logs`, not nested inside either.
 
 In the `server.on('upgrade', ...)` handler, find the two spots handling `wsPath === 'api'` (one inside the JWT branch, one inside the session branch) and add a parallel `wsPath === 'ssh'` branch next to each, reusing the exact same auth flow already established for `'api'`:
 
@@ -1717,10 +1745,10 @@ describe('SSHTerminal terminal view', () => {
     (global as any).WebSocket = MockWebSocket;
   });
 
-  it('opens a WebSocket to /api/ssh/terminal with the appId once connected', () => {
+  it('opens a WebSocket to /ssh with the appId once connected', () => {
     render(<SSHTerminal.AppComponent {...buildApp({ host: 'example.com', port: 22, credentialId: 'cred-1', connected: true })} />);
     expect(wsInstances).toHaveLength(1);
-    expect(wsInstances[0].url).toContain('/api/ssh/terminal?appId=app-1');
+    expect(wsInstances[0].url).toContain('/ssh?appId=app-1');
   });
 
   it('sends an input message when the current controller types, but not otherwise', () => {
@@ -1874,7 +1902,7 @@ function TerminalView(props: App): JSX.Element {
     terminalRef.current = term;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ssh/terminal?appId=${props._id}`);
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ssh?appId=${props._id}`);
     wsRef.current = ws;
 
     ws.onmessage = (event) => {
@@ -1982,10 +2010,13 @@ git commit -m "feat(ssh-terminal): add xterm.js terminal view, WebSocket client,
 
 **Type consistency check:** `ConnectParams`/`ConnectResult` (Task 1, later centralized into `libs/backend` in Task 2 to avoid app-code-importing-into-a-library) → REST body/response shapes (Task 2) → WebSocket relay's `getAppState` return shape (Task 3) → app state schema (Task 4) → `TerminalView`'s state reads (Task 5) all agree on field names (`host`, `port`, `ownerId`, `credentialId`, `controllerId`, `connected`).
 
-**Verified against the actual codebase during self-review — three real bugs found and fixed, not left as guesses:**
+**Verified against the actual codebase during self-review — five real bugs found and fixed, not left as guesses (three caught before implementation, two caught during/after Task 3's actual implementation and corrected here retroactively):**
 
 1. Task 5's "current user's id" access was initially written against a guessed API shape (`const user = useUser(); user?.id`). Checked directly against `libs/frontend/src/lib/providers/useUser.tsx` and two existing consumers (`CodeEditor.tsx:101`, `Cobrowse.tsx:57`) — the real shape is `const { user } = useUser();` with the id at `user?._id`, matching the same `SBDoc`-style `_id` convention `App` itself uses. The plan's code and tests were corrected to this real shape.
 2. Task 3's `getAppState` callback (and its `main.ts` wiring in Step 5) were initially written as synchronous. Checked `AppsCollection.get()`'s real signature (`libs/backend/src/lib/generics/SAGECollection.ts:101`) — it's `public async get(id): Promise<SBDocument<T> | undefined>`, a Redis read. Every call site (`sshWebSocketRelay.ts`'s implementation, its test doubles, and the `main.ts` wiring example) was corrected to `async`/`await` throughout — a synchronous version would have either failed to type-check or silently read `undefined` state on every connection attempt.
 3. **Found during Task 3's actual implementation, not caught in this plan's own self-review pass — corrected here after the fact.** `attachSSHWebSocketServer`'s original reference implementation called `registry.onOutput(appId, listener)` once per connecting socket, with `listener` closed over that one socket. This doesn't broadcast to "every viewer" at all: each subscription's callback can only reach the one socket it closed over, so a second viewer's own subscription can never deliver output to the first viewer's socket. The corrected version (shown above) uses one shared `viewersByApp: Map<appId, Set<WebSocket>>`, subscribes to `registry.onOutput`/`onStatus` only for the first viewer of a given `appId`, and fans out to every socket currently in that appId's Set — later viewers ride along on the existing subscription instead of getting their own. The task's own test (already shown above, unchanged) actually caught this: it registers two viewers and asserts both receive a broadcast triggered through `registry.onOutput`'s first recorded call, which only passes under the shared-subscription design.
+4. **Found during Task 3's task review, not this plan's own self-review pass — corrected here after the fact.** The originally-planned client-facing route, `/api/ssh/terminal`, could never actually work: `main.ts`'s WS upgrade dispatcher routes purely on the URL's first path segment, so anything starting `/api/...` is always claimed by the existing authenticated API WebSocket handler before a nested `ssh` segment could ever be inspected — real SSH-terminal traffic would have been silently misrouted into `apiWebSocketServer`'s unrelated message parser. Corrected throughout (spec, plan Architecture summary, Task 3's `main.ts` wiring, and Task 5's frontend WebSocket URL/test) to a top-level `/ssh?appId=...` path, a sibling of `/api` and `/logs`, not nested under either.
+5. **Also found during Task 3's task review.** The same route also exposed a second, independent bug: `main.ts`'s existing `wsPath = pathname.split('/')[1]` extraction never accounted for a query string, because `/api`/`/logs` never carried one — but `/ssh` genuinely needs `?appId=...`, and `pathname.split('/')[1]` on `/ssh?appId=app-5` yields `"ssh?appId=app-5"`, not `"ssh"`. Task 3's Step 5 now includes an explicit one-line fix to the existing extraction (stripping the query string before splitting) alongside adding the new branch, with an explanation of why `/api`/`/logs` are unaffected by the change.
+6. **Also found during Task 3's task review.** `attachSSHWebSocketServer`'s connection handler registered `message`/`close` listeners but no `error` listener — Node's `EventEmitter` throws (crashing the entire homebase process, not just the one connection) when a `ws` socket emits `'error'` with zero listeners attached, which happens on an abrupt client disconnect/TCP reset. The existing `apiWebSocketServer` pattern already guards against exactly this; Task 3's implementation code now includes the same `socket.on('error', ...)` guard.
 
-**Known gap, deliberately left for a human decision rather than guessed at:** none — all three gaps found (above) were resolved by checking the actual source/tests rather than left open.
+**Known gap, deliberately left for a human decision rather than guessed at:** none — all six gaps found (above) were resolved by checking the actual source/tests rather than left open.
