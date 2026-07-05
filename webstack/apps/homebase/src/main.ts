@@ -195,8 +195,8 @@ async function startServer() {
     // get url path
     const pathname = request.url;
     if (!pathname) return;
-    // get the first word of the url
-    const wsPath = pathname.split('/')[1];
+    // get the first path segment of the url, ignoring any query string
+    const wsPath = pathname.split('?')[0].split('/')[1];
 
     // Logs socket - noauth for now
     if (wsPath === 'logs') {

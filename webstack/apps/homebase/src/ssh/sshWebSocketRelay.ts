@@ -63,6 +63,10 @@ export function attachSSHWebSocketServer(
     }
     viewers.add(socket);
 
+    socket.on('error', () => {
+      console.log('sshWebSocketRelay> socket error');
+    });
+
     if (!registry.getConnection(appId)) {
       const state = await getAppState(appId);
       await registry.connect(appId, {
