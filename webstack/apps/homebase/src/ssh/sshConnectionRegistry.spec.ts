@@ -109,7 +109,21 @@ describe('SSHConnectionRegistry', () => {
     expect(registry.getConnection('app-2')).toBeUndefined();
   });
 
-  it('returns unreachable when the SSH connection itself errors before ready', async () => {
+  it('resolves with credential_unavailable (never hangs/throws) when credential resolution fails with an unexpected error', async () => {
+    (SBCredentialsDB.getDecryptedValue as jest.Mock).mockRejectedValue(new Error('Redis connection lost'));
+
+    const result = await registry.connect('app-2b', {
+      host: 'example.com',
+      port: 22,
+      ownerId: 'user-1',
+      credentialId: 'cred-1',
+    });
+
+    expect(result).toEqual({ success: false, error: 'credential_unavailable' });
+    expect(registry.getConnection('app-2b')).toBeUndefined();
+  });
+
+  it('returns unreachable when the SSH connection itself errors before ready with no distinguishing level', async () => {
     const connectPromise = registry.connect('app-3', {
       host: 'unreachable.example.com',
       port: 22,
@@ -121,6 +135,20 @@ describe('SSHConnectionRegistry', () => {
 
     const result = await connectPromise;
     expect(result).toEqual({ success: false, error: 'unreachable' });
+  });
+
+  it("returns auth_failed when the ssh2 error carries level: 'client-authentication'", async () => {
+    const connectPromise = registry.connect('app-3b', {
+      host: 'example.com',
+      port: 22,
+      ownerId: 'user-1',
+      newCredential: { name: 'x', value: { type: 'sshPrivateKey', username: 'u', privateKey: 'key' } },
+    });
+    const client = fakeClients[0];
+    client.emit('error', Object.assign(new Error('All configured authentication methods failed'), { level: 'client-authentication' }));
+
+    const result = await connectPromise;
+    expect(result).toEqual({ success: false, error: 'auth_failed' });
   });
 
   it('returns tmux_failed when exec itself errors', async () => {
@@ -239,7 +267,16 @@ describe('SSHConnectionRegistry', () => {
     expect(registry.getConnection('app-10')).toBeUndefined();
   });
 
-  it('reconnecting after a remote stream close uses the stored ownerId, not a fresh caller identity', async () => {
+  it('reconnecting after a remote stream close passes through whatever ownerId parameter connect() is given, consistently across calls', async () => {
+    // This is a correctness/passthrough test, not a security-boundary test:
+    // it proves connect() forwards its `ownerId` parameter to
+    // SBCredentialsDB.getDecryptedValue unchanged on repeated calls. It does
+    // NOT prove anything about which identity a caller is allowed to supply —
+    // this registry has no "stored" ownerId of its own and enforces nothing
+    // about where that value comes from (see class doc comment). The actual
+    // guarantee that a reconnect uses the app's persisted owner rather than a
+    // triggering browser session's identity is enforced by the caller
+    // (Task 3's WebSocket relay), not by this module.
     (SBCredentialsDB.getDecryptedValue as jest.Mock).mockResolvedValue({
       type: 'sshPrivateKey',
       username: 'u',
@@ -251,9 +288,8 @@ describe('SSHConnectionRegistry', () => {
     fakeClients[0].lastStream!.emit('close');
     expect(registry.getConnection('app-11')).toBeUndefined();
 
-    // A later reconnect call (as Task 3's WS route would trigger) must reuse
-    // the ORIGINAL ownerId — it is never told the identity of whichever
-    // browser's WebSocket happened to trigger this reconnect attempt.
+    // A later reconnect call with the same ownerId parameter must pass it
+    // through to SBCredentialsDB.getDecryptedValue unchanged.
     (SBCredentialsDB.getDecryptedValue as jest.Mock).mockClear();
     await connectAndEmitReady('app-11', { host: 'h', port: 22, ownerId: 'owner-user', credentialId: 'cred-1' });
     expect(SBCredentialsDB.getDecryptedValue).toHaveBeenCalledWith('cred-1', 'owner-user');

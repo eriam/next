@@ -8,15 +8,20 @@
  * The only place anywhere that calls SBCredentialsDB.getDecryptedValue()
  * for an sshPrivateKey credential. Holds at most one live SSH connection
  * per app instance (keyed by appId) — this is a SHARED, collaborative
- * terminal, not one connection per browser tab. A (re)connect always
- * decrypts using the connection's own stored ownerId, never the identity
- * of whichever caller happens to trigger it — this is what lets any
- * viewer of the app cause a reconnect without ever needing (or being
- * able to use) someone else's credential themselves.
+ * terminal, not one connection per browser tab.
+ *
+ * This registry takes `ownerId` as an explicit parameter on every `connect()`
+ * call and trusts the caller to supply the right one — it has no notion of a
+ * "stored" or persistent owner of its own, and does not enforce anything
+ * about where that value came from. The guarantee that a (re)connect always
+ * uses the app's persisted owner — never the identity of whichever browser
+ * session happens to trigger the reconnect — is enforced by the CALLER
+ * (the WebSocket relay, which reads `ownerId` from the app's Redis-backed
+ * state document rather than from the triggering request's session).
  */
 
 import { Client } from 'ssh2';
-import { SBCredentialsDB, CredentialDecryptionError } from '@sage3/sagebase';
+import { SBCredentialsDB } from '@sage3/sagebase';
 
 export type ConnectParams = {
   host: string;
@@ -53,12 +58,12 @@ export class SSHConnectionRegistry {
     const client = new Client();
 
     // Set up the promise and event handlers synchronously, so they're ready
-    // before the test emits 'ready' or 'error' events
+    // before the test emits 'ready' or 'error' events.
+    // connect()'s contract is to always resolve, never reject/hang, so there
+    // is no reject function here.
     let resolveConnect: ((result: ConnectResult) => void) | undefined;
-    let rejectConnect: ((error: Error) => void) | undefined;
-    const connectPromise = new Promise<ConnectResult>((resolve, reject) => {
+    const connectPromise = new Promise<ConnectResult>((resolve) => {
       resolveConnect = resolve;
-      rejectConnect = reject;
     });
 
     let hasResolved = false;
@@ -107,8 +112,9 @@ export class SSHConnectionRegistry {
       });
     });
 
-    client.on('error', () => {
-      const result = { success: false, error: 'unreachable' as const };
+    client.on('error', (err: Error & { level?: string }) => {
+      const error = err.level === 'client-authentication' ? ('auth_failed' as const) : ('unreachable' as const);
+      const result = { success: false, error };
       resultForPersist = result;
       tryResolve(result);
     });
@@ -135,11 +141,13 @@ export class SSHConnectionRegistry {
       try {
         value = await SBCredentialsDB.getDecryptedValue(params.credentialId, params.ownerId);
       } catch (error) {
-        if (error instanceof CredentialDecryptionError) {
-          tryResolve({ success: false, error: 'credential_unavailable' });
-          return;
-        }
-        throw error;
+        // Any failure resolving the credential — a CredentialDecryptionError,
+        // a Redis error from SBCredentialsDB, or anything else thrown from
+        // this credential-fetching code — is reported as credential_unavailable.
+        // connect()'s contract is to always resolve, never hang or reject, so
+        // this must not rethrow.
+        tryResolve({ success: false, error: 'credential_unavailable' });
+        return;
       }
       if (!value || value.type !== 'sshPrivateKey') {
         tryResolve({ success: false, error: 'credential_unavailable' });
@@ -169,7 +177,15 @@ export class SSHConnectionRegistry {
     const connectResult = await connectPromise;
 
     if (connectResult.success && params.newCredential && !params.credentialId) {
-      await SBCredentialsDB.createOrUpdate(params.ownerId, 'sshPrivateKey', params.newCredential.name, params.newCredential.value);
+      try {
+        await SBCredentialsDB.createOrUpdate(params.ownerId, 'sshPrivateKey', params.newCredential.name, params.newCredential.value);
+      } catch (error) {
+        // The SSH/tmux connection itself already succeeded — don't change the
+        // result we already resolved with just because persisting the
+        // credential for next time failed. Log and move on so this doesn't
+        // become an unhandled promise rejection.
+        console.error(`Failed to persist newCredential for app ${appId}:`, error);
+      }
     }
   }
 
