@@ -121,6 +121,7 @@
       "MapGL",
       "Notepad",
       "Poll",
+      "SSHTerminal",
       "Stickie",
       "Webview"
     ]

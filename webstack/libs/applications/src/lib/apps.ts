@@ -32,6 +32,7 @@ import { name as RTCChatName } from './apps/RTCChat';
 import { name as SageIdeatorName } from './apps/SageIdeator';
 import { name as SageCellName } from './apps/SageCell';
 import { name as SensorOverviewName } from './apps/SensorOverview';
+import { name as SSHTerminalName } from './apps/SSHTerminal';
 import { name as StickieName } from './apps/Stickie';
 import { name as TimerName } from './apps/Timer';
 import { name as TwilioScreenshareName } from './apps/TwilioScreenshare';
@@ -76,6 +77,7 @@ import RTCChat from './apps/RTCChat/RTCChat';
 import SageIdeator from './apps/SageIdeator/SageIdeator';
 import SageCell from './apps/SageCell/SageCell';
 import SensorOverview from './apps/SensorOverview/SensorOverview';
+import SSHTerminal from './apps/SSHTerminal/SSHTerminal';
 import Stickie from './apps/Stickie/Stickie';
 import Timer from './apps/Timer/Timer';
 import TwilioScreenshare from './apps/TwilioScreenshare/TwilioScreenshare';
@@ -245,6 +247,11 @@ export const Applications = {
     AppComponent: React.memo(SensorOverview.AppComponent),
     ToolbarComponent: SensorOverview.ToolbarComponent,
     GroupedToolbarComponent: SensorOverview.GroupedToolbarComponent,
+  },
+  [SSHTerminalName]: {
+    AppComponent: React.memo(SSHTerminal.AppComponent),
+    ToolbarComponent: SSHTerminal.ToolbarComponent,
+    GroupedToolbarComponent: SSHTerminal.GroupedToolbarComponent,
   },
   [StickieName]: {
     AppComponent: React.memo(Stickie.AppComponent),

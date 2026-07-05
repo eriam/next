@@ -24,6 +24,29 @@
       },
       "tags": []
     },
+    "frontend": {
+      "root": "libs/frontend",
+      "sourceRoot": "libs/frontend/src",
+      "projectType": "library",
+      "architect": {
+        "lint": {
+          "builder": "@nrwl/linter:eslint",
+          "outputs": ["{options.outputFile}"],
+          "options": {
+            "lintFilePatterns": ["libs/frontend/**/*.ts"]
+          }
+        },
+        "test": {
+          "builder": "@nrwl/jest:jest",
+          "outputs": ["coverage/libs/frontend"],
+          "options": {
+            "jestConfig": "libs/frontend/jest.config.js",
+            "passWithNoTests": true
+          }
+        }
+      },
+      "tags": []
+    },
     "backend": {
       "root": "libs/backend",
       "sourceRoot": "libs/backend/src",
