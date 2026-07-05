@@ -94,7 +94,7 @@ New router, `apps/homebase/src/api/routers/custom/integrations/ctfd.ts`, mounted
 Handler logic:
 1. Resolve the credential: either look up `credentialId` (404 if not owned by `req.user.id`) or take the freshly-supplied value directly (not yet saved).
 2. Decrypt it (only this handler ever calls `decryptCredentialValue`).
-3. Make the actual `POST {ctfd_url}/api/sage/register` call server-side (SAGE3's own backend, not the browser) with `{app_id, ctfd_url, token: secret}`.
+3. Make the actual `POST {ctfd_url}/api/sage/register` call server-side (SAGE3's own backend, not the browser) with `{app_id, token: secret}`.
 4. On success: if this was a `newCredential`, save it now (so a bad token never gets persisted); return `{success: true}`.
 5. On failure: return a specific, non-secret error — `{error: 'invalid_token'}` vs `{error: 'ctfd_unreachable'}` — the frontend already distinguishes these today via `useRegistration`'s error state.
 
