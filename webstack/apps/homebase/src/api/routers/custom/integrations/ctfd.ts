@@ -13,7 +13,7 @@
  */
 
 import * as express from 'express';
-import { SBCredentialsDB, SBAuthSchema } from '@sage3/sagebase';
+import { SBCredentialsDB, SBAuthSchema, CredentialDecryptionError } from '@sage3/sagebase';
 
 export function CtfdIntegrationRouter(): express.Router {
   const router = express.Router();
@@ -28,9 +28,27 @@ export function CtfdIntegrationRouter(): express.Router {
     const user = req.user as SBAuthSchema;
     const { app_id, ctfd_url, credentialId, newCredential } = req.body;
 
+    if (!app_id || !ctfd_url || (!credentialId && !newCredential)) {
+      res.status(400).json({ error: 'app_id, ctfd_url, and either credentialId or newCredential are required' });
+      return;
+    }
+    if (newCredential && (!newCredential.name || !newCredential.value?.secret)) {
+      res.status(400).json({ error: 'newCredential.name and newCredential.value.secret are required' });
+      return;
+    }
+
     let secret: string;
     if (credentialId) {
-      const value = await SBCredentialsDB.getDecryptedValue(credentialId, user.id);
+      let value;
+      try {
+        value = await SBCredentialsDB.getDecryptedValue(credentialId, user.id);
+      } catch (error) {
+        if (error instanceof CredentialDecryptionError) {
+          res.status(500).json({ error: 'credential_unavailable' });
+          return;
+        }
+        throw error;
+      }
       if (!value || value.type !== 'secretText') {
         res.status(404).json({ error: 'Credential not found' });
         return;

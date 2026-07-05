@@ -40,12 +40,13 @@ function buildApp(userId: string, db: SBCredentialsDatabase) {
 describeIfRedis('ctfd integration handler — real Express + real Redis, mocked external CTFd', () => {
   let db: SBCredentialsDatabase;
   let redisClient: ReturnType<typeof createClient>;
+  const redisPrefix = `ctfd-integration-test-${Date.now()}`;
 
   beforeAll(async () => {
     redisClient = createClient({ url: REDIS_URL });
     await redisClient.connect();
     db = new SBCredentialsDatabase();
-    await db.init(redisClient as any, `ctfd-integration-test-${Date.now()}`, 'ctfd-test-key');
+    await db.init(redisClient as any, redisPrefix, 'ctfd-test-key');
   });
 
   afterAll(async () => {
@@ -159,5 +160,53 @@ describeIfRedis('ctfd integration handler — real Express + real Redis, mocked 
         body: JSON.stringify({ app_id: 'app-xyz', token: 'ctfd_checkme' }),
       })
     );
+  });
+
+  it('returns 400 when neither credentialId nor newCredential is provided', async () => {
+    const app = buildApp('user-8', db);
+    const res = await request(app).post('/api/integrations/ctfd/register').send({
+      app_id: 'app-abc',
+      ctfd_url: 'http://ctfd.test',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when newCredential is missing required fields', async () => {
+    const app = buildApp('user-9', db);
+    const res = await request(app).post('/api/integrations/ctfd/register').send({
+      app_id: 'app-abc',
+      ctfd_url: 'http://ctfd.test',
+      newCredential: { name: 'incomplete' }, // missing value.secret
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns a generic 500 error (not a raw stack trace) when the stored credential fails to decrypt', async () => {
+    // Simulate a corrupted/tampered stored value by creating a credential
+    // then manually corrupting its encryptedValue directly via Redis, so
+    // getDecryptedValue's internal decrypt call throws CredentialDecryptionError.
+    const created = await db.createOrUpdate('user-10', 'secretText', 'will-corrupt', {
+      type: 'secretText',
+      secret: 'ctfd_original',
+    });
+    // SBCredentialsDatabase.init() sets `this._prefix = prefix + ':CREDENTIALS'`
+    // and stores each doc at `${this._prefix}:${id}` via redis json.set — see
+    // SBCredentialsDatabase.ts createOrUpdate()/readById(). This test's `db`
+    // was initialized (above, in beforeAll) with prefix `ctfd-integration-test-${Date.now()}`,
+    // so we reconstruct the same key here and overwrite just the
+    // `.encryptedValue` field with garbage base64, using the same redisClient.
+    await redisClient.json.set(`${redisPrefix}:CREDENTIALS:${created.id}`, '.encryptedValue', 'not-valid-base64-ciphertext==');
+
+    const app = buildApp('user-10', db);
+    const res = await request(app).post('/api/integrations/ctfd/register').send({
+      app_id: 'app-abc',
+      ctfd_url: 'http://ctfd.test',
+      credentialId: created.id,
+    });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'credential_unavailable' });
+    // Critically: the response must be JSON, not an HTML error page with a stack trace.
+    expect(res.headers['content-type']).toMatch(/json/);
   });
 });
