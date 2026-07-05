@@ -1732,6 +1732,8 @@ npm install --legacy-peer-deps @xterm/xterm@^5.5.0 @xterm/addon-fit@^0.10.0
 
 - [ ] **Step 2: Write the failing test for the terminal view**
 
+Add `import { Terminal } from '@xterm/xterm';` to this file's existing import lines (needed for `jest.spyOn(Terminal.prototype, 'onData')` in the input-gating tests below).
+
 Replace the content of `webstack/libs/applications/src/lib/apps/SSHTerminal/SSHTerminal.spec.tsx` with the Task 4 tests plus these additions (append these `describe` blocks after the existing `describe('SSHTerminal setup form', ...)` block, keeping everything from Task 4 intact):
 
 ```typescript
@@ -1768,17 +1770,34 @@ describe('SSHTerminal terminal view', () => {
     expect(wsInstances[0].url).toContain('/ssh?appId=app-1');
   });
 
-  it('sends an input message when the current controller types, but not otherwise', () => {
-    const { rerender } = render(
-      <SSHTerminal.AppComponent {...buildApp({ host: 'h', port: 22, credentialId: 'c', connected: true, controllerId: 'user-1' })} />
+  it('sends an input message when the current controller types', () => {
+    // Capture the real onData callback the component registers, via a spy
+    // on Terminal.prototype — the real xterm.js Terminal class runs in
+    // this jsdom test environment (not mocked), so its onData registration
+    // is real, we're just intercepting the callback to invoke it directly
+    // instead of needing a real DOM keystroke event.
+    const onDataSpy = jest.spyOn(Terminal.prototype, 'onData');
+    render(
+      <SSHTerminal.AppComponent {...buildApp({ host: 'h', port: 22, credentialId: 'c', connected: true, controllerId: 'app-1-current-user' })} />
     );
-    // xterm.js's own onData callback isn't directly triggerable from a DOM
-    // event in this test setup; this test instead verifies the component
-    // does NOT eagerly send any input message just from rendering, which
-    // is the property that matters for the "drop input from non-controllers"
-    // requirement being satisfied on the SEND side too (the receive side
-    // is already covered server-side in Task 3's tests).
+    const onDataCallback = onDataSpy.mock.calls[0][0];
+    onDataCallback('ls\n');
+
+    const inputMessages = sentMessages.filter((m) => JSON.parse(m).type === 'input');
+    expect(inputMessages).toEqual([JSON.stringify({ type: 'input', data: 'ls\n' })]);
+    onDataSpy.mockRestore();
+  });
+
+  it('does not send an input message when a non-controller "types"', () => {
+    const onDataSpy = jest.spyOn(Terminal.prototype, 'onData');
+    render(
+      <SSHTerminal.AppComponent {...buildApp({ host: 'h', port: 22, credentialId: 'c', connected: true, controllerId: 'someone-else' })} />
+    );
+    const onDataCallback = onDataSpy.mock.calls[0][0];
+    onDataCallback('rm -rf /\n');
+
     expect(sentMessages.filter((m) => JSON.parse(m).type === 'input')).toHaveLength(0);
+    onDataSpy.mockRestore();
   });
 
   it('shows a "Take control" button when the viewer is not the controller', () => {
@@ -1903,10 +1922,21 @@ function TerminalView(props: App): JSX.Element {
   const { user } = useUser();
   const updateState = useAppStore((state) => state.updateState);
   const containerRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const terminalRef = useRef<Terminal | null>(null);
 
   const isController = s.controllerId === user?._id;
+  // Mirrored into a ref so the stable term.onData closure below (created
+  // once, when the main effect runs) can always read the CURRENT
+  // controller status without needing isController in that effect's own
+  // dependency array — adding it there would tear down and recreate the
+  // WebSocket/terminal every time control changes hands, which would drop
+  // the connection unnecessarily. The server enforces the real security
+  // boundary regardless (Task 3's relay drops input from non-controllers);
+  // this ref only avoids sending keystrokes client-side that the server
+  // would silently discard anyway.
+  const isControllerRef = useRef(isController);
+  useEffect(() => {
+    isControllerRef.current = isController;
+  }, [isController]);
 
   useEffect(() => {
     const term = new Terminal({ convertEol: true });
@@ -1916,11 +1946,9 @@ function TerminalView(props: App): JSX.Element {
       term.open(containerRef.current);
       fitAddon.fit();
     }
-    terminalRef.current = term;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ssh?appId=${props._id}`);
-    wsRef.current = ws;
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -1932,7 +1960,7 @@ function TerminalView(props: App): JSX.Element {
     };
 
     const dataDisposable = term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (isControllerRef.current && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'input', data }));
       }
     });
@@ -2035,5 +2063,6 @@ git commit -m "feat(ssh-terminal): add xterm.js terminal view, WebSocket client,
 4. **Found during Task 3's task review, not this plan's own self-review pass — corrected here after the fact.** The originally-planned client-facing route, `/api/ssh/terminal`, could never actually work: `main.ts`'s WS upgrade dispatcher routes purely on the URL's first path segment, so anything starting `/api/...` is always claimed by the existing authenticated API WebSocket handler before a nested `ssh` segment could ever be inspected — real SSH-terminal traffic would have been silently misrouted into `apiWebSocketServer`'s unrelated message parser. Corrected throughout (spec, plan Architecture summary, Task 3's `main.ts` wiring, and Task 5's frontend WebSocket URL/test) to a top-level `/ssh?appId=...` path, a sibling of `/api` and `/logs`, not nested under either.
 5. **Also found during Task 3's task review.** The same route also exposed a second, independent bug: `main.ts`'s existing `wsPath = pathname.split('/')[1]` extraction never accounted for a query string, because `/api`/`/logs` never carried one — but `/ssh` genuinely needs `?appId=...`, and `pathname.split('/')[1]` on `/ssh?appId=app-5` yields `"ssh?appId=app-5"`, not `"ssh"`. Task 3's Step 5 now includes an explicit one-line fix to the existing extraction (stripping the query string before splitting) alongside adding the new branch, with an explanation of why `/api`/`/logs` are unaffected by the change.
 6. **Also found during Task 3's task review, then refined once more after a re-review caught an incomplete first pass.** `attachSSHWebSocketServer`'s connection handler registered `message`/`close` listeners but no `error` listener — Node's `EventEmitter` throws (crashing the entire homebase process, not just the one connection) when a `ws` socket emits `'error'` with zero listeners attached, which happens on an abrupt client disconnect/TCP reset. The first fix attached the guard AFTER the `appId`-missing early return, leaving exactly that narrow case (connecting with no `appId`) still unguarded — a re-review caught this. The guard is now the very first statement in the connection handler, before any early return can happen. While fixing this, also caught and fixed a second, related crash path: the initial `getAppState`/`registry.connect` call was unguarded async work inside an `async` connection handler — an uncaught rejection there (e.g. `getAppState` throwing because the app doesn't exist) becomes an unhandled promise rejection, which `main.ts`'s global handler turns into `process.exit(1)`, crashing the whole server over one bad `appId`. Now wrapped in try/catch, with matching cleanup of the `viewers` Set (the socket was already added to it before the attempt, and the `close` handler that would normally clean it up isn't registered yet at that point).
+7. **Found during Task 5's task review — this plan's own reference code never actually gated client-side keystroke sending on controller status.** `TerminalView`'s `term.onData` handler sent every keystroke to the server regardless of `isController`, relying entirely on Task 3's server-side drop (`state.controllerId !== req.user.id`) to make non-controller input a no-op. That server-side enforcement is correct and already tested — this was not a security gap — but it directly contradicted this plan's own stated intent ("only honored if the sender is the current controllerId," stated as a client behavior too) and meant non-controllers got no local feedback that their typing was being silently discarded server-side. Fixed by mirroring `isController` into a ref (`isControllerRef`), updated by a small separate effect whenever `isController` changes, which the stable `onData` closure reads from directly — this avoids needing `isController` in the main effect's own dependency array, which would otherwise tear down and recreate the whole WebSocket/terminal connection every time control changed hands. While fixing this, also removed two now-provably-unused refs (`wsRef`/`terminalRef` — the cleanup function already closes over the local `ws`/`term` variables directly, these refs were never actually read anywhere) and replaced a vacuous test (which only asserted "no eager send on mount," not the actual controller-gating behavior, by its own admission in its comment) with two real tests that capture the actual `Terminal.prototype.onData` callback via `jest.spyOn` and invoke it directly under both controller and non-controller state.
 
-**Known gap, deliberately left for a human decision rather than guessed at:** none — all six gaps found (above) were resolved by checking the actual source/tests rather than left open.
+**Known gap, deliberately left for a human decision rather than guessed at:** none — all seven gaps found (above) were resolved by checking the actual source/tests rather than left open.
