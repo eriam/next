@@ -49,6 +49,11 @@ export function attachSSHWebSocketServer(
   const unsubscribeByApp = new Map<string, () => void>();
 
   wsServer.on('connection', async (socket, req) => {
+    // Attach error handler FIRST, before any early returns
+    socket.on('error', () => {
+      console.log('sshWebSocketRelay> socket error');
+    });
+
     const url = new URL(req.url, 'http://localhost');
     const appId = url.searchParams.get('appId');
     if (!appId) {
@@ -63,18 +68,25 @@ export function attachSSHWebSocketServer(
     }
     viewers.add(socket);
 
-    socket.on('error', () => {
-      console.log('sshWebSocketRelay> socket error');
-    });
-
     if (!registry.getConnection(appId)) {
-      const state = await getAppState(appId);
-      await registry.connect(appId, {
-        host: state.host,
-        port: state.port,
-        ownerId: state.ownerId,
-        credentialId: state.credentialId,
-      });
+      try {
+        const state = await getAppState(appId);
+        await registry.connect(appId, {
+          host: state.host,
+          port: state.port,
+          ownerId: state.ownerId,
+          credentialId: state.credentialId,
+        });
+      } catch (error) {
+        console.log('sshWebSocketRelay> failed to establish connection for appId', appId, error);
+        // The socket was already added to the viewers Set before this
+        // attempt — remove it now, since the close handler that would
+        // normally do this cleanup isn't registered yet at this point.
+        viewers.delete(socket);
+        if (viewers.size === 0) viewersByApp.delete(appId);
+        socket.close();
+        return;
+      }
     }
 
     // Only the first viewer of an appId subscribes to the registry — every
