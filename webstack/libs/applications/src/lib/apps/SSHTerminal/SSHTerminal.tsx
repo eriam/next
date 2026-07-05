@@ -82,10 +82,12 @@ function TerminalView(props: App): JSX.Element {
   const { user } = useUser();
   const updateState = useAppStore((state) => state.updateState);
   const containerRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const terminalRef = useRef<Terminal | null>(null);
 
   const isController = s.controllerId === user?._id;
+  const isControllerRef = useRef(isController);
+  useEffect(() => {
+    isControllerRef.current = isController;
+  }, [isController]);
 
   useEffect(() => {
     const term = new Terminal({ convertEol: true });
@@ -95,11 +97,9 @@ function TerminalView(props: App): JSX.Element {
       term.open(containerRef.current);
       fitAddon.fit();
     }
-    terminalRef.current = term;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ssh?appId=${props._id}`);
-    wsRef.current = ws;
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -111,7 +111,7 @@ function TerminalView(props: App): JSX.Element {
     };
 
     const dataDisposable = term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (isControllerRef.current && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'input', data }));
       }
     });

@@ -7,17 +7,24 @@
  */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Terminal } from '@xterm/xterm';
+
+const capturedTerminalInstances: any[] = [];
 
 jest.mock('@xterm/xterm', () => ({
-  Terminal: jest.fn().mockImplementation(() => ({
-    loadAddon: jest.fn(),
-    open: jest.fn(),
-    write: jest.fn(),
-    onData: jest.fn(() => ({ dispose: jest.fn() })),
-    dispose: jest.fn(),
-    cols: 80,
-    rows: 24,
-  })),
+  Terminal: jest.fn().mockImplementation(() => {
+    const instance = {
+      loadAddon: jest.fn(),
+      open: jest.fn(),
+      write: jest.fn(),
+      onData: jest.fn(() => ({ dispose: jest.fn() })),
+      dispose: jest.fn(),
+      cols: 80,
+      rows: 24,
+    };
+    capturedTerminalInstances.push(instance);
+    return instance;
+  }),
 }));
 
 jest.mock('@xterm/addon-fit', () => ({
@@ -182,6 +189,7 @@ describe('SSHTerminal terminal view', () => {
   beforeEach(() => {
     sentMessages = [];
     wsInstances = [];
+    capturedTerminalInstances.length = 0;
     (global as any).WebSocket = MockWebSocket;
   });
 
@@ -191,16 +199,26 @@ describe('SSHTerminal terminal view', () => {
     expect(wsInstances[0].url).toContain('/ssh?appId=app-1');
   });
 
-  it('sends an input message when the current controller types, but not otherwise', () => {
-    const { rerender } = render(
-      <SSHTerminal.AppComponent {...buildApp({ host: 'h', port: 22, credentialId: 'c', connected: true, controllerId: 'user-1' })} />
+  it('sends an input message when the current controller types', () => {
+    render(
+      <SSHTerminal.AppComponent {...buildApp({ host: 'h', port: 22, credentialId: 'c', connected: true, controllerId: 'app-1-current-user' })} />
     );
-    // xterm.js's own onData callback isn't directly triggerable from a DOM
-    // event in this test setup; this test instead verifies the component
-    // does NOT eagerly send any input message just from rendering, which
-    // is the property that matters for the "drop input from non-controllers"
-    // requirement being satisfied on the SEND side too (the receive side
-    // is already covered server-side in Task 3's tests).
+    const terminalInstance = capturedTerminalInstances[0];
+    const onDataCallback = terminalInstance.onData.mock.calls[0][0];
+    onDataCallback('ls\n');
+
+    const inputMessages = sentMessages.filter((m) => JSON.parse(m).type === 'input');
+    expect(inputMessages).toEqual([JSON.stringify({ type: 'input', data: 'ls\n' })]);
+  });
+
+  it('does not send an input message when a non-controller "types"', () => {
+    render(
+      <SSHTerminal.AppComponent {...buildApp({ host: 'h', port: 22, credentialId: 'c', connected: true, controllerId: 'someone-else' })} />
+    );
+    const terminalInstance = capturedTerminalInstances[0];
+    const onDataCallback = terminalInstance.onData.mock.calls[0][0];
+    onDataCallback('rm -rf /\n');
+
     expect(sentMessages.filter((m) => JSON.parse(m).type === 'input')).toHaveLength(0);
   });
 
