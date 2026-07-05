@@ -6,6 +6,7 @@
  * the file LICENSE, distributed as part of this software.
  */
 
+export * from './useCredentials';
 export * from './useData';
 export * from './usePeer';
 export * from './useMeasure';
