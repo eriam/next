@@ -912,10 +912,12 @@ const describeIfRedis = REDIS_URL ? describe : describe.skip;
 
 function buildApp(userId: string, db: SBCredentialsDatabase) {
   const app = express();
-  // Deliberately no global express.json() here — the real apps/homebase
-  // app only has express.urlencoded() globally (see
-  // apps/homebase/src/web/http-server.ts:74), so this test only passes if
-  // the router itself parses its own JSON body, exactly like production.
+  // Deliberately no global express.json() on this test app — even though
+  // the real apps/homebase app does have one globally
+  // (apps/homebase/src/web/http-server.ts:73), this test intentionally
+  // doesn't rely on it, so it only passes if the router provides its own
+  // parsing (a stricter check than production actually needs, kept so
+  // this router stays self-sufficient/testable in isolation).
   app.use((req, _res, next) => {
     (req as express.Request & { user: { id: string } }).user = { id: userId };
     next();
@@ -1134,10 +1136,11 @@ import { SBCredentialsDB, SBAuthSchema, CredentialType } from '@sage3/sagebase';
 
 export function CredentialsRouter(): express.Router {
   const router = express.Router();
-  // apps/homebase's global middleware only applies express.urlencoded(),
-  // not express.json() (see apps/homebase/src/web/http-server.ts:74) — these
-  // routes need a real JSON body, so parse it locally rather than changing
-  // global behavior other routes might depend on.
+  // apps/homebase's global middleware already includes express.json()
+  // (apps/homebase/src/web/http-server.ts:73), so this is redundant in
+  // production — kept anyway so this router stays self-sufficient and
+  // testable in isolation without depending on the global setup never
+  // changing.
   router.use(express.json());
 
   router.post('/', async (req, res) => {
@@ -1264,10 +1267,12 @@ const describeIfRedis = REDIS_URL ? describe : describe.skip;
 
 function buildApp(userId: string, db: SBCredentialsDatabase) {
   const app = express();
-  // Deliberately no global express.json() here — the real apps/homebase
-  // app only has express.urlencoded() globally (see
-  // apps/homebase/src/web/http-server.ts:74), so this test only passes if
-  // the router itself parses its own JSON body, exactly like production.
+  // Deliberately no global express.json() on this test app — even though
+  // the real apps/homebase app does have one globally
+  // (apps/homebase/src/web/http-server.ts:73), this test intentionally
+  // doesn't rely on it, so it only passes if the router provides its own
+  // parsing (a stricter check than production actually needs, kept so
+  // this router stays self-sufficient/testable in isolation).
   app.use((req, _res, next) => {
     (req as express.Request & { user: { id: string } }).user = { id: userId };
     next();
@@ -1504,8 +1509,11 @@ import { SBCredentialsDB, SBAuthSchema } from '@sage3/sagebase';
 
 export function CtfdIntegrationRouter(): express.Router {
   const router = express.Router();
-  // Same reason as CredentialsRouter: apps/homebase has no global
-  // express.json() (only express.urlencoded()), so parse it locally.
+  // apps/homebase's global middleware already includes express.json()
+  // (apps/homebase/src/web/http-server.ts:73), so this is redundant in
+  // production — kept anyway so this router stays self-sufficient and
+  // testable in isolation (matching CredentialsRouter's own router-level
+  // parsing) without depending on the global setup never changing.
   router.use(express.json());
 
   router.post('/register', async (req, res) => {
