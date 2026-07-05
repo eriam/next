@@ -38,7 +38,7 @@ import {
 import { SAGEBase } from '@sage3/sagebase';
 
 // Custom Routes
-import { ConfigRouter, InfoRouter, TimeRouter, NLPRouter, LogsRouter, KernelsRouter, PresenceThrottle, AgentRouter, CredentialsRouter } from './custom';
+import { ConfigRouter, InfoRouter, TimeRouter, NLPRouter, LogsRouter, KernelsRouter, PresenceThrottle, AgentRouter, CredentialsRouter, CtfdIntegrationRouter } from './custom';
 
 import { config } from '../../config';
 
@@ -78,6 +78,9 @@ export function expressAPIRouter(): express.Router {
 
   // Credentials store
   router.use('/credentials', CredentialsRouter());
+
+  // First-party integration handlers
+  router.use('/integrations/ctfd', CtfdIntegrationRouter());
 
   // Check to see if plugins module is enabled.
   if (config.features.plugins) {
