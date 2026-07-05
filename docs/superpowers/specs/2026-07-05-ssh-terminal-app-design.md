@@ -35,7 +35,7 @@ If every browser WebSocket for an `appId` disconnects, homebase is free to drop 
 - the actual authorization boundary is "can this user see/interact with this SAGE3 app instance at all" — the same boundary that already gates every other shared piece of app state.
 
 **Data flow, end to end:**
-1. Browser opens a dedicated WebSocket to homebase (e.g. `wss://.../api/ssh/terminal?appId=...`), authenticated via the same session cookie every other homebase route already uses.
+1. Browser opens a dedicated WebSocket to homebase (`wss://.../ssh?appId=...` — a top-level path, not nested under `/api/`; homebase's existing WS upgrade dispatcher routes purely on the first path segment, so a path starting with `/api/` would always be claimed by the existing authenticated API WebSocket handler before any nested segment could be inspected), authenticated via the same session cookie every other homebase route already uses.
 2. Homebase looks up the connection registry entry for that `appId`. If none exists yet, it establishes one: decrypt the stored credential (via `SBCredentialsDB.getDecryptedValue(credentialId, ownerId)` — the app's stored `ownerId`, per the exception above), `ssh2` connect, exec `tmux new -A -s sage3-<appId>`.
 3. Remote stdout/stderr is broadcast to every browser WebSocket currently open for that `appId`.
 4. Keystrokes arriving from the WebSocket belonging to the current `controllerId` are written to the remote session's stdin; keystrokes from anyone else are dropped server-side — this is enforced in the relay itself, not just hidden in the UI.
@@ -78,7 +78,7 @@ Unlike `ctfd`, this call doesn't just validate — it *is* the actual connection
 
 If this was a `newCredential`, it's only persisted (via `SBCredentialsDB.createOrUpdate`) after the SSH handshake and the `tmux new` command both succeed — a bad key or bad host never gets saved, same principle as the `ctfd` handler's "don't persist on failure" rule.
 
-## WebSocket protocol (`/api/ssh/terminal`)
+## WebSocket protocol (`/ssh`)
 
 A new WebSocket route in homebase, alongside the existing `apiWebSocketServer`/`logsServer` upgrade handling in `main.ts`. Messages, both directions, are small JSON envelopes:
 
