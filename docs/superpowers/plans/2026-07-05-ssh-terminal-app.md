@@ -1057,6 +1057,18 @@ export function attachSSHWebSocketServer(
   // a Redis call — see the note above Step 1 explaining why.
   getAppState: (appId: string) => Promise<SSHAppState>
 ): void {
+  // One shared broadcast per appId, fanned out to every currently-connected
+  // viewer socket — NOT one registry.onOutput() subscription per socket.
+  // A per-socket subscription is a real bug, not just redundant: each
+  // subscription's callback only has access to its OWN socket (via
+  // closure), so a second viewer's output callback can never reach the
+  // first viewer's socket and vice versa — nothing would actually
+  // broadcast to "every viewer," only to whichever single socket happened
+  // to own that particular subscription. Only the FIRST viewer of a given
+  // appId subscribes; later viewers ride along via viewersByApp.
+  const viewersByApp = new Map<string, Set<WebSocket>>();
+  const unsubscribeByApp = new Map<string, () => void>();
+
   wsServer.on('connection', async (socket, req) => {
     const url = new URL(req.url, 'http://localhost');
     const appId = url.searchParams.get('appId');
@@ -1064,6 +1076,13 @@ export function attachSSHWebSocketServer(
       socket.close();
       return;
     }
+
+    let viewers = viewersByApp.get(appId);
+    if (!viewers) {
+      viewers = new Set();
+      viewersByApp.set(appId, viewers);
+    }
+    viewers.add(socket);
 
     if (!registry.getConnection(appId)) {
       const state = await getAppState(appId);
@@ -1075,12 +1094,18 @@ export function attachSSHWebSocketServer(
       });
     }
 
-    const unsubscribeOutput = registry.onOutput(appId, (data) => {
-      send(socket, { type: 'output', data });
-    });
-    const unsubscribeStatus = registry.onStatus(appId, (status) => {
-      send(socket, { type: 'status', connected: status.connected, error: status.error });
-    });
+    if (!unsubscribeByApp.has(appId)) {
+      const unsubscribeOutput = registry.onOutput(appId, (data) => {
+        viewersByApp.get(appId)?.forEach((viewerSocket) => send(viewerSocket, { type: 'output', data }));
+      });
+      const unsubscribeStatus = registry.onStatus(appId, (status) => {
+        viewersByApp.get(appId)?.forEach((viewerSocket) => send(viewerSocket, { type: 'status', connected: status.connected, error: status.error }));
+      });
+      unsubscribeByApp.set(appId, () => {
+        unsubscribeOutput();
+        unsubscribeStatus();
+      });
+    }
 
     socket.on('message', async (raw: Buffer | string) => {
       let message: ClientMessage;
@@ -1101,8 +1126,13 @@ export function attachSSHWebSocketServer(
     });
 
     socket.on('close', () => {
-      unsubscribeOutput();
-      unsubscribeStatus();
+      const remaining = viewersByApp.get(appId);
+      remaining?.delete(socket);
+      if (remaining && remaining.size === 0) {
+        unsubscribeByApp.get(appId)?.();
+        unsubscribeByApp.delete(appId);
+        viewersByApp.delete(appId);
+      }
     });
   });
 }
@@ -1952,9 +1982,10 @@ git commit -m "feat(ssh-terminal): add xterm.js terminal view, WebSocket client,
 
 **Type consistency check:** `ConnectParams`/`ConnectResult` (Task 1, later centralized into `libs/backend` in Task 2 to avoid app-code-importing-into-a-library) → REST body/response shapes (Task 2) → WebSocket relay's `getAppState` return shape (Task 3) → app state schema (Task 4) → `TerminalView`'s state reads (Task 5) all agree on field names (`host`, `port`, `ownerId`, `credentialId`, `controllerId`, `connected`).
 
-**Verified against the actual codebase during self-review — two real bugs found and fixed, not left as guesses:**
+**Verified against the actual codebase during self-review — three real bugs found and fixed, not left as guesses:**
 
 1. Task 5's "current user's id" access was initially written against a guessed API shape (`const user = useUser(); user?.id`). Checked directly against `libs/frontend/src/lib/providers/useUser.tsx` and two existing consumers (`CodeEditor.tsx:101`, `Cobrowse.tsx:57`) — the real shape is `const { user } = useUser();` with the id at `user?._id`, matching the same `SBDoc`-style `_id` convention `App` itself uses. The plan's code and tests were corrected to this real shape.
 2. Task 3's `getAppState` callback (and its `main.ts` wiring in Step 5) were initially written as synchronous. Checked `AppsCollection.get()`'s real signature (`libs/backend/src/lib/generics/SAGECollection.ts:101`) — it's `public async get(id): Promise<SBDocument<T> | undefined>`, a Redis read. Every call site (`sshWebSocketRelay.ts`'s implementation, its test doubles, and the `main.ts` wiring example) was corrected to `async`/`await` throughout — a synchronous version would have either failed to type-check or silently read `undefined` state on every connection attempt.
+3. **Found during Task 3's actual implementation, not caught in this plan's own self-review pass — corrected here after the fact.** `attachSSHWebSocketServer`'s original reference implementation called `registry.onOutput(appId, listener)` once per connecting socket, with `listener` closed over that one socket. This doesn't broadcast to "every viewer" at all: each subscription's callback can only reach the one socket it closed over, so a second viewer's own subscription can never deliver output to the first viewer's socket. The corrected version (shown above) uses one shared `viewersByApp: Map<appId, Set<WebSocket>>`, subscribes to `registry.onOutput`/`onStatus` only for the first viewer of a given `appId`, and fans out to every socket currently in that appId's Set — later viewers ride along on the existing subscription instead of getting their own. The task's own test (already shown above, unchanged) actually caught this: it registers two viewers and asserts both receive a broadcast triggered through `registry.onOutput`'s first recorded call, which only passes under the shared-subscription design.
 
-**Known gap, deliberately left for a human decision rather than guessed at:** none — both gaps found during self-review (above) were resolved by checking the actual source rather than left open.
+**Known gap, deliberately left for a human decision rather than guessed at:** none — all three gaps found (above) were resolved by checking the actual source/tests rather than left open.
