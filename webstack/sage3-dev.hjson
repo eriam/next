@@ -205,6 +205,10 @@
     }
   },
 
+  // Key used to derive the encryption key for the credentials store (personal
+  // API tokens, SSH keys, etc). Change this to something unique per deployment.
+  "secretsEncryptionKey": "CHANGE-ME-CREDENTIALS-KEY!!",
+
   // Namespace for signing uuid v5 keys
   "namespace": "150e32f0-62b8-11ed-974d-1b79350be347"
 }
