@@ -11,10 +11,11 @@ import { SBCredentialsDB, SBAuthSchema, CredentialType } from '@sage3/sagebase';
 
 export function CredentialsRouter(): express.Router {
   const router = express.Router();
-  // apps/homebase's global middleware only applies express.urlencoded(),
-  // not express.json() (see apps/homebase/src/web/http-server.ts:74) — these
-  // routes need a real JSON body, so parse it locally rather than changing
-  // global behavior other routes might depend on.
+  // apps/homebase's global middleware already includes express.json()
+  // (apps/homebase/src/web/http-server.ts:73), so this is redundant in
+  // production — kept anyway so this router stays self-sufficient and
+  // testable in isolation without depending on the global setup never
+  // changing.
   router.use(express.json());
 
   router.post('/', async (req, res) => {

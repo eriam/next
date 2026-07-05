@@ -22,10 +22,12 @@ const describeIfRedis = REDIS_URL ? describe : describe.skip;
 
 function buildApp(userId: string, db: SBCredentialsDatabase) {
   const app = express();
-  // Deliberately no global express.json() here — the real apps/homebase
-  // app only has express.urlencoded() globally (see
-  // apps/homebase/src/web/http-server.ts:74), so this test only passes if
-  // the router itself parses its own JSON body, exactly like production.
+  // Deliberately no global express.json() on this test app — even though
+  // the real apps/homebase app does have one globally
+  // (apps/homebase/src/web/http-server.ts:73), this test intentionally
+  // doesn't rely on it, so it only passes if the router provides its own
+  // parsing (a stricter check than production actually needs, kept so
+  // this router stays self-sufficient/testable in isolation).
   app.use((req, _res, next) => {
     (req as express.Request & { user: { id: string } }).user = { id: userId };
     next();
