@@ -26,6 +26,7 @@ pipeline {
                 sshagent(credentials: ['jenkins-deploy-key']) {
                     sh """
                         ssh ${DEPLOY_USER}@${BUILDER_HOST} '
+                            docker image prune -af 2>/dev/null || true &&
                             rm -rf /tmp/sage3-build &&
                             git clone --branch ${BRANCH} ${GITEA_REPO} /tmp/sage3-build &&
                             cd /tmp/sage3-build &&
