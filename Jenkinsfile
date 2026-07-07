@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    options {
+        disableConcurrentBuilds()
+    }
+
     parameters {
         choice(name: 'DEPLOY_TARGET', choices: ['staging', 'production', 'none'], description: 'Cible de déploiement')
     }
