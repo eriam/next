@@ -62,7 +62,7 @@ pipeline {
                             grep -q LDAP_BIND_PASSWORD .env || (echo "ERREUR: LDAP_BIND_PASSWORD absent du .env" && exit 1) &&
                             git config --global --add safe.directory ${APP_DIR} 2>/dev/null || true &&
                             if [ -d .git ]; then
-                                git fetch origin ${BRANCH} && git checkout ${BRANCH} && git pull origin ${BRANCH}
+                                git fetch origin ${BRANCH} && git checkout -- . && git checkout ${BRANCH} && git checkout -- . && git pull origin ${BRANCH}
                             else
                                 git clone --branch ${BRANCH} ${GITEA_REPO} /tmp/sage3-stg &&
                                 cp -r /tmp/sage3-stg/. . &&
@@ -103,7 +103,7 @@ pipeline {
                             grep -q LDAP_BIND_PASSWORD .env || (echo "ERREUR: LDAP_BIND_PASSWORD absent du .env" && exit 1) &&
                             git config --global --add safe.directory ${APP_DIR} 2>/dev/null || true &&
                             if [ -d .git ]; then
-                                git fetch origin ${BRANCH} && git checkout ${BRANCH} && git pull origin ${BRANCH}
+                                git fetch origin ${BRANCH} && git checkout -- . && git checkout ${BRANCH} && git checkout -- . && git pull origin ${BRANCH}
                             else
                                 git clone --branch ${BRANCH} ${GITEA_REPO} /tmp/sage3-deploy &&
                                 cp -r /tmp/sage3-deploy/. . &&
