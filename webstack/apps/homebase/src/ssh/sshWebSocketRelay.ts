@@ -1,0 +1,163 @@
+/**
+ * Copyright (c) SAGE3 Development Team 2026. All Rights Reserved
+ * University of Hawaii, University of Illinois Chicago, Virginia Tech
+ *
+ * Distributed under the terms of the SAGE3 License.  The full license is in
+ * the file LICENSE, distributed as part of this software.
+ *
+ * Relays a browser WebSocket to/from the shared per-appId SSH connection.
+ * Every viewer of the app instance connects here and receives the same
+ * output broadcast; only the current controller's input is honored — this
+ * is enforced here, not left to the frontend to self-police.
+ */
+
+import { WebSocket } from 'ws';
+import { SSHConnectionRegistry } from './sshConnectionRegistry';
+
+// The minimal shape this module needs from an SSHTerminal app's current
+// state — supplied by the caller (main.ts) via a lookup function, since
+// this module has no direct dependency on the app-state store.
+type SSHAppState = {
+  host: string;
+  port: number;
+  ownerId: string;
+  credentialId?: string;
+  controllerId?: string;
+};
+
+type ClientMessage = { type: 'input'; data: string } | { type: 'resize'; cols: number; rows: number };
+type ServerMessage = { type: 'output'; data: string } | { type: 'status'; connected: boolean; error?: string };
+
+function send(socket: WebSocket, message: ServerMessage) {
+  socket.send(JSON.stringify(message));
+}
+
+export function attachSSHWebSocketServer(
+  wsServer: { on: (event: 'connection', listener: (socket: WebSocket, req: { user: { id: string }; url: string }) => void) => void },
+  registry: SSHConnectionRegistry,
+  // Async: the real implementation reads this via AppsCollection.get(),
+  // a Redis call — see the note above Step 1 explaining why.
+  getAppState: (appId: string) => Promise<SSHAppState>
+): void {
+  // Every viewer of the same appId shares a single SSH connection and must
+  // all receive the same output/status broadcast. Track the connected
+  // sockets per appId here (module-level to this attach() call) rather than
+  // subscribing to registry.onOutput/onStatus once per socket — that would
+  // register a separate listener closed over just that one socket, so a
+  // second viewer's output would never reach the first viewer's socket.
+  const viewersByApp = new Map<string, Set<WebSocket>>();
+  const unsubscribeByApp = new Map<string, () => void>();
+
+  wsServer.on('connection', async (socket, req) => {
+    // Attach error handler FIRST, before any early returns
+    socket.on('error', () => {
+      console.log('sshWebSocketRelay> socket error');
+    });
+
+    const url = new URL(req.url, 'http://localhost');
+    const appId = url.searchParams.get('appId');
+    console.log('sshWebSocketRelay> connection received, appId=', appId, 'user=', req.user?.id);
+    if (!appId) {
+      socket.close();
+      return;
+    }
+
+    let viewers = viewersByApp.get(appId);
+    if (!viewers) {
+      viewers = new Set();
+      viewersByApp.set(appId, viewers);
+    }
+    viewers.add(socket);
+
+    if (!registry.getConnection(appId)) {
+      try {
+        const state = await getAppState(appId);
+        const result = await registry.connect(appId, {
+          host: state.host,
+          port: state.port,
+          ownerId: state.ownerId,
+          credentialId: state.credentialId,
+        });
+        if (!result.success) {
+          // registry.connect() never rejects — it always resolves, even on
+          // failure. Treat a resolved failure identically to the catch
+          // block below: report status and bail out BEFORE the subscribe
+          // block runs. Falling through here would still register a
+          // subscription in unsubscribeByApp even though there's no real
+          // connection to subscribe to (onOutput/onStatus return no-op
+          // unsubscribes when getConnection() is undefined), which would
+          // permanently poison that appId's subscription for every future
+          // viewer via the `!unsubscribeByApp.has(appId)` guard below.
+          send(socket, { type: 'status', connected: false, error: result.error });
+          viewers.delete(socket);
+          if (viewers.size === 0) viewersByApp.delete(appId);
+          socket.close();
+          return;
+        }
+      } catch (error) {
+        console.log('sshWebSocketRelay> failed to establish connection for appId', appId, error);
+        // The socket was already added to the viewers Set before this
+        // attempt — remove it now, since the close handler that would
+        // normally do this cleanup isn't registered yet at this point.
+        viewers.delete(socket);
+        if (viewers.size === 0) viewersByApp.delete(appId);
+        socket.close();
+        return;
+      }
+    }
+
+    // Only the first viewer of an appId subscribes to the registry — every
+    // subsequent viewer just gets added to the `viewers` Set above and rides
+    // along on that single subscription's broadcast.
+    console.log('sshWebSocketRelay> subscribing viewer, has existing subscription=', unsubscribeByApp.has(appId));
+    if (!unsubscribeByApp.has(appId)) {
+      const unsubscribeOutput = registry.onOutput(appId, (data) => {
+        console.log('sshWebSocketRelay> broadcasting output, bytes=', data.length, 'viewers=', viewersByApp.get(appId)?.size);
+        viewersByApp.get(appId)?.forEach((viewerSocket) => send(viewerSocket, { type: 'output', data }));
+      });
+      const unsubscribeStatus = registry.onStatus(appId, (status) => {
+        viewersByApp
+          .get(appId)
+          ?.forEach((viewerSocket) => send(viewerSocket, { type: 'status', connected: status.connected, error: status.error }));
+      });
+      unsubscribeByApp.set(appId, () => {
+        unsubscribeOutput();
+        unsubscribeStatus();
+      });
+    }
+
+    socket.on('message', async (raw: Buffer | string) => {
+      let message: ClientMessage;
+      try {
+        message = JSON.parse(raw.toString());
+      } catch {
+        return;
+      }
+
+      if (message.type === 'input') {
+        const state = await getAppState(appId);
+        if (state.controllerId !== req.user.id) return;
+        registry.write(appId, message.data);
+      } else if (message.type === 'resize') {
+        // Unlike input, resize isn't sensitive to who sends it — any viewer
+        // fitting their own window should be able to trigger a redraw. tmux
+        // uses the smallest attached client's size across all viewers, so
+        // this is the same tradeoff any shared tmux session already has.
+        registry.resize(appId, message.cols, message.rows);
+      }
+    });
+
+    socket.on('close', () => {
+      viewers?.delete(socket);
+      if (viewers && viewers.size === 0) {
+        viewersByApp.delete(appId);
+        unsubscribeByApp.get(appId)?.();
+        unsubscribeByApp.delete(appId);
+        // No one is watching this app instance's terminal anymore — tear
+        // down the shared SSH/tmux connection rather than leaving it open
+        // for the lifetime of the homebase process.
+        registry.disconnect(appId);
+      }
+    });
+  });
+}

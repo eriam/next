@@ -26,6 +26,11 @@
     "secure": false,
     "ws": true
   },
+  "/ssh": {
+    "target": "http://127.0.0.1:3000",
+    "secure": false,
+    "ws": true
+  },
   "/rtc": {
     "target": "http://127.0.0.1:3001",
     "secure": false,
