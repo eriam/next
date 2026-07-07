@@ -6,7 +6,6 @@
  * the file LICENSE, distributed as part of this software.
  */
 
-export * from './useCredentials';
 export * from './useData';
 export * from './usePeer';
 export * from './useMeasure';
@@ -23,3 +22,4 @@ export * from './useThrottlePresenceUsers';
 export * from './useAbility';
 export * from './useNetworkState';
 export * from './usePressureObserver';
+export * from './useCredentials';

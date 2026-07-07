@@ -25,7 +25,11 @@ interface UseCredentialsResult {
   refetch: () => void;
 }
 
-export function useCredentials(type: CredentialType): UseCredentialsResult {
+// type is optional: omitting it lists every credential the user owns,
+// across all types (used by the credentials settings tab). Passing a type
+// scopes the list to just that type (used by a consuming app's own picker,
+// e.g. SSHTerminal only ever wants its 'sshPrivateKey' credentials).
+export function useCredentials(type?: CredentialType): UseCredentialsResult {
   const [credentials, setCredentials] = useState<CredentialMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [refetchNonce, setRefetchNonce] = useState(0);
@@ -37,7 +41,8 @@ export function useCredentials(type: CredentialType): UseCredentialsResult {
     (async () => {
       setLoading(true);
       try {
-        const resp = await fetch(`/api/credentials?type=${type}`, { headers: { 'Content-Type': 'application/json' } });
+        const url = type ? `/api/credentials?type=${type}` : '/api/credentials';
+        const resp = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
         if (!resp.ok) return;
         const json = (await resp.json()) as CredentialMetadata[];
         if (!cancelled) setCredentials(json);

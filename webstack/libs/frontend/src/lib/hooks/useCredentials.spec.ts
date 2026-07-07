@@ -29,6 +29,24 @@ describe('useCredentials', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/credentials?type=sshPrivateKey', expect.anything());
   });
 
+  it('fetches every credential, all types, when called with no type argument', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        { id: 'c1', name: 'ssh-key', type: 'sshPrivateKey', ownerId: 'u1', createdAt: 1, updatedAt: 1 },
+        { id: 'c2', name: 'ctfd-token', type: 'secretText', ownerId: 'u1', createdAt: 2, updatedAt: 2 },
+      ],
+    });
+
+    const { result } = renderHook(() => useCredentials());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.credentials).toHaveLength(2);
+    // No ?type= query param at all — not even an empty one — since the
+    // route treats a present-but-empty type differently from an absent one.
+    expect(global.fetch).toHaveBeenCalledWith('/api/credentials', expect.anything());
+  });
+
   it('starts with an empty list and loading=true before the fetch resolves', () => {
     (global.fetch as jest.Mock).mockReturnValue(new Promise(() => {}));
     const { result } = renderHook(() => useCredentials('sshPrivateKey'));
