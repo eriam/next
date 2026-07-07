@@ -22,6 +22,9 @@ export async function GetConfiguration(): Promise<OpenConfiguration> {
       'Content-Type': 'application/json',
     },
   });
+  if (!response.ok) {
+    return {} as OpenConfiguration;
+  }
   const config = (await response.json()) as OpenConfiguration;
   return config;
 }

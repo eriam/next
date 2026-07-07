@@ -60,13 +60,14 @@ type LdapAuthenticator = { authenticate: typeof passport.authenticate };
  */
 export function makeLdapAuthHandler(passportInstance: LdapAuthenticator) {
   return (req: Request, res: Response, next: NextFunction) => {
-    passportInstance.authenticate('ldapauth', (err: Error | null, user: Express.User | false) => {
+    passportInstance.authenticate('ldapauth', (err: Error | null, user: Express.User | false, info?: { message?: string }) => {
       // ldapauth-fork can emit a late connection 'error' after we've already
       // responded (e.g. on connection teardown), which re-invokes this callback.
       // Guard against a double response that otherwise throws
       // "Cannot set headers after they are sent to the client".
       if (res.headersSent) return;
       if (err || !user) {
+        console.log('LDAP> auth failed', { err: err?.message, info });
         return res.redirect('/?error=ldap_failed');
       }
       req.logIn(user, (loginErr: Error) => {

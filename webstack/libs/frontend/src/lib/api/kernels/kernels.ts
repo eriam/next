@@ -165,16 +165,25 @@ async function interruptKernel(kernelId: string): Promise<any> {
  *
  */
 async function fetchKernelTypes(): Promise<string[]> {
-  const response = await fetch(apiUrls.kernels.getKernelsSpecs, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  const data = await response.json();
-  const kernelTypes = [];
-  for (const key in data) {
-    kernelTypes.push(key);
+  try {
+    const response = await fetch(apiUrls.kernels.getKernelsSpecs, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) {
+      console.log('The SAGE Kernel server appears to be offline.');
+      return [];
+    }
+    const data = await response.json();
+    const kernelTypes = [];
+    for (const key in data) {
+      kernelTypes.push(key);
+    }
+    return kernelTypes;
+  } catch (error) {
+    console.log('The SAGE Kernel server appears to be offline.');
+    return [];
   }
-  return kernelTypes;
 }
 
 /**
