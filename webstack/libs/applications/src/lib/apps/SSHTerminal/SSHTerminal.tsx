@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Box, Button, Input, VStack, RadioGroup, Radio, Text } from '@chakra-ui/react';
+import { Box, Button, Input, Textarea, VStack, RadioGroup, Radio, Text } from '@chakra-ui/react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -28,48 +28,113 @@ function SetupForm(props: App): JSX.Element {
   const [host, setHost] = useState('');
   const [port, setPort] = useState(22);
   const [credentialId, setCredentialId] = useState('');
+  const [showNewCredentialForm, setShowNewCredentialForm] = useState(false);
+  const [newCredentialName, setNewCredentialName] = useState('');
+  const [username, setUsername] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [passphrase, setPassphrase] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { credentials } = useCredentials('sshPrivateKey');
+  const { credentials, loading: credentialsLoading } = useCredentials('sshPrivateKey');
   const updateState = useAppStore((state) => state.updateState);
+
+  // No existing key to pick from — go straight to the "enter a new key" form.
+  useEffect(() => {
+    if (!credentialsLoading && credentials.length === 0) {
+      setShowNewCredentialForm(true);
+    }
+  }, [credentialsLoading, credentials.length]);
+
+  const canConnect = Boolean(host && (credentialId || (showNewCredentialForm && newCredentialName && username && privateKey)));
 
   async function handleConnect() {
     setConnecting(true);
     setError(null);
     try {
+      const body: Record<string, unknown> = { appId: props._id, host, port };
+      if (showNewCredentialForm) {
+        body.newCredential = {
+          name: newCredentialName,
+          value: { type: 'sshPrivateKey', username, privateKey, passphrase: passphrase || undefined },
+        };
+      } else {
+        body.credentialId = credentialId;
+      }
       const resp = await fetch('/api/integrations/ssh/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appId: props._id, host, port, credentialId }),
+        body: JSON.stringify(body),
       });
       const data = await resp.json();
       if (!resp.ok) {
         setError(ERROR_MESSAGES[data.error] || 'Connection failed.');
         return;
       }
-      updateState(props._id, { host, port, credentialId, connected: true } as Partial<AppState>);
+      updateState(props._id, { host, port, connected: true } as Partial<AppState>);
     } finally {
       setConnecting(false);
     }
   }
 
   return (
-    <Box p={4}>
+    <Box p={4} overflowY="auto" maxHeight="100%">
       <VStack align="stretch" spacing={3}>
         <Input placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} />
         <Input placeholder="Port" type="number" value={port} onChange={(e) => setPort(Number(e.target.value))} />
-        <RadioGroup value={credentialId} onChange={setCredentialId}>
-          <VStack align="stretch">
-            {credentials.map((c) => (
-              <Radio key={c.id} value={c.id}>
-                {c.name}
-              </Radio>
-            ))}
+
+        {credentials.length > 0 && !showNewCredentialForm && (
+          <>
+            <RadioGroup value={credentialId} onChange={setCredentialId}>
+              <VStack align="stretch">
+                {credentials.map((c) => (
+                  <Radio key={c.id} value={c.id}>
+                    {c.name}
+                  </Radio>
+                ))}
+              </VStack>
+            </RadioGroup>
+            <Button size="sm" variant="link" onClick={() => setShowNewCredentialForm(true)}>
+              + Use a new key instead
+            </Button>
+          </>
+        )}
+
+        {showNewCredentialForm && (
+          <VStack align="stretch" spacing={2} borderWidth={1} borderRadius="md" p={3}>
+            <Text fontSize="sm" fontWeight="bold">
+              New SSH key
+            </Text>
+            <Input
+              placeholder="Name (e.g. my-server-key)"
+              value={newCredentialName}
+              onChange={(e) => setNewCredentialName(e.target.value)}
+            />
+            <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            <Textarea
+              placeholder="Private key (paste the full contents, e.g. -----BEGIN OPENSSH PRIVATE KEY-----...)"
+              value={privateKey}
+              onChange={(e) => setPrivateKey(e.target.value)}
+              rows={6}
+              fontFamily="mono"
+              fontSize="xs"
+            />
+            <Input
+              placeholder="Passphrase (optional)"
+              type="password"
+              value={passphrase}
+              onChange={(e) => setPassphrase(e.target.value)}
+            />
+            {credentials.length > 0 && (
+              <Button size="sm" variant="link" onClick={() => setShowNewCredentialForm(false)}>
+                Use an existing key instead
+              </Button>
+            )}
           </VStack>
-        </RadioGroup>
+        )}
+
         {error && <Text color="red.400">{error}</Text>}
-        <Button onClick={handleConnect} isLoading={connecting} isDisabled={!host || !credentialId}>
+        <Button onClick={handleConnect} isLoading={connecting} isDisabled={!canConnect}>
           Connect
         </Button>
       </VStack>
