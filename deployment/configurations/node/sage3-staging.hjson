@@ -133,7 +133,6 @@
     // Which login strategies to enable for the server. 
     // If you enbable them ensure you add the relevant config information below.
     "strategies": [
-      "guest",
       "spectator",
       "jwt",
       "ldap"
