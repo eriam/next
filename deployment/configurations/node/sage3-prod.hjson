@@ -130,6 +130,7 @@
       "PluginApp",
       "Poll",
       "SageCell",
+      "SSHTerminal",
       "Stickie",
       "Timer",
       "VegaLite",
