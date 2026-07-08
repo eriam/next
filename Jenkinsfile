@@ -81,7 +81,8 @@ pipeline {
                             docker compose -f deployment/docker-compose-amd64.yml \
                                 -f deployment/docker-compose.registry-override.yml pull &&
                             docker compose -f deployment/docker-compose-amd64.yml \
-                                -f deployment/docker-compose.registry-override.yml up -d
+                                -f deployment/docker-compose.registry-override.yml up -d &&
+                            docker image prune -f
                         '
                     """
                 }
@@ -116,7 +117,8 @@ pipeline {
                             docker compose -f deployment/docker-compose-amd64.yml \
                                 -f deployment/docker-compose.registry-override.yml pull &&
                             docker compose -f deployment/docker-compose-amd64.yml \
-                                -f deployment/docker-compose.registry-override.yml up -d
+                                -f deployment/docker-compose.registry-override.yml up -d &&
+                            docker image prune -f
                         '
                     """
                 }
