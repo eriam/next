@@ -8,7 +8,7 @@
   "port_files": 3002,
 
    // Name of the server to show in the UI
-  "serverName": "My Local Server",
+  "serverName": "SAGE3",
 
   // These can be left alone, they are used to find the assets
   "root": ".",
@@ -75,6 +75,7 @@
       "text": {
         "url": "https://dev-sage3-us2.openai.azure.com",
         "model": "gpt-4.1-mini",
+        "apiKey": "",
         "api_version": "2024-12-01-preview"
       },
       "embedding": {
@@ -110,16 +111,30 @@
     "plugins": true,
     // Which Apps to enable
     "apps": [
-      "Chat",
-      "ChartMaker",
-      "Map",
+      "AssetLink",
+      "Calculator",
+      "Clock",
+      "CodeEditor",
+      "Counter",
+      "CSVViewer",
+      "DeepZoomImage",
+      "Drawing",
+      "EChartsViewer",
+      "GLTFViewer",
+      "ImageViewer",
+      "JupyterLab",
+      "Linker",
+      "Mermaid",
       "Notepad",
+      "PDFViewer",
+      "PluginApp",
       "Poll",
       "SageCell",
       "Stickie",
-      "Screenshare",
-      "Webview",
-      "Hawaii Mesonet"
+      "Timer",
+      "VegaLite",
+      "VegaLiteViewer",
+      "VideoViewer"
     ]
   },
 
@@ -132,12 +147,9 @@
     // Which login strategies to enable for the server. 
     // If you enbable them ensure you add the relevant config information below.
     "strategies": [
-      "google",
-      "cilogon",
-      "guest",
       "spectator",
-      // "keycloak",
-      "jwt"
+      "jwt",
+      "ldap"
     ],
     // A List of emails to enable those users to be admins.
     "admins": [],
@@ -173,31 +185,23 @@
       // JWT Route endpoint
       "routeEndpoint": "/auth/jwt"
     },
-    // Keycloak (or any OpenID Connect provider) configuration
-    // "keycloakConfig": {
-      // Full Keycloak realm URL — Keycloak will autodiscover all OIDC endpoints from this
-      // "issuerURL": "http://localhost:8080/realms/sage3",
-      // Client ID created in the Keycloak realm
-      // "clientID": "sage3-local",
-      // Client Secret (leave empty for public clients)
-      // "clientSecret": "",
-      // Endpoint to initiate Keycloak login
-      // "routeEndpoint": "/auth/keycloak",
-      // Must match the redirect URI configured in your Keycloak client
-      // "callbackURL": "/auth/keycloak/redirect"
-    // }
-    // CILogon configuration
-    "cilogonConfig": {
-      // Client ID from CILogon
-      "clientID": "",
-      // Client Secret from CILogon
-      "clientSecret": "",
-      // Endpoint for the cilogon login
-      "routeEndpoint": "/auth/cilogon",
-      // Callback URL for the cilogon login
-      "callbackURL": "/auth/cilogon/redirect"
+    // LDAP / Active Directory configuration
+    "ldapConfig": {
+      "url": "ldaps://192.168.1.37",
+      "bindDN": "CN=svc-sage3,CN=Users,DC=lab,DC=local",
+      "bindCredentials": "CHANGE_ME_LDAP_PASS",
+      "searchBase": "DC=lab,DC=local",
+      "searchFilter": "(sAMAccountName={{username}})",
+      "groupMapping": {
+        "admin": "CN=Domain Admins,CN=Users,DC=lab,DC=local",
+        "user": "CN=Domain Users,CN=Users,DC=lab,DC=local"
+      },
+      "defaultRole": "user",
+      "tlsOptions": {
+        "rejectUnauthorized": false
+      }
     }
   },
   // Namespace for signing UUID v5 keys: generate yours or https://www.uuidtools.com/generate/v4
-  "namespace": "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+  "namespace": "748d8e16-1775-4057-bd1e-08cacd5066ad"
 }
