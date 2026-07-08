@@ -6,7 +6,7 @@ pipeline {
     }
 
     parameters {
-        choice(name: 'DEPLOY_TARGET', choices: ['staging', 'production', 'none'], description: 'Cible de déploiement')
+        choice(name: 'DEPLOY_TARGET', choices: ['staging', 'production', 'both', 'none'], description: 'Cible de déploiement')
     }
 
     environment {
@@ -55,7 +55,7 @@ pipeline {
         }
 
         stage('Deploy Staging') {
-            when { expression { params.DEPLOY_TARGET == 'staging' } }
+            when { expression { params.DEPLOY_TARGET == 'staging' || params.DEPLOY_TARGET == 'both' } }
             steps {
                 sshagent(credentials: ['jenkins-deploy-key']) {
                     sh """
@@ -90,12 +90,7 @@ pipeline {
 
         stage('Deploy Production') {
             when {
-                expression { params.DEPLOY_TARGET == 'production' }
-                beforeInput true
-            }
-            input {
-                message 'Déployer SAGE3 en production ?'
-                ok 'Déployer'
+                expression { params.DEPLOY_TARGET == 'production' || params.DEPLOY_TARGET == 'both' }
             }
             steps {
                 sshagent(credentials: ['jenkins-deploy-key']) {
