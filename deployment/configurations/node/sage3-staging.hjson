@@ -189,6 +189,9 @@
       }
     }
   },
+  // Key used to derive the encryption key for the credentials store (SSH keys,
+  // tokens, etc). Injected from SECRETS_ENCRYPTION_KEY in .env at deploy time.
+  "secretsEncryptionKey": "CHANGE_ME_SECRETS_KEY",
   // Namespace for signing UUID v5 keys: generate yours or https://www.uuidtools.com/generate/v4
   "namespace": "748d8e16-1775-4057-bd1e-08cacd5066ad"
 }

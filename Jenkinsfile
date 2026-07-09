@@ -76,6 +76,8 @@ pipeline {
                             LDAP_PASS=\$(grep LDAP_BIND_PASSWORD .env | cut -d= -f2) &&
                             cp deployment/configurations/node/sage3-staging.hjson deployment/configurations/node/sage3-prod.hjson &&
                             sed -i "s/CHANGE_ME_LDAP_PASS/\${LDAP_PASS}/" deployment/configurations/node/sage3-prod.hjson &&
+                            SECRETS_KEY=\$(grep SECRETS_ENCRYPTION_KEY .env | cut -d= -f2) &&
+                            sed -i "s/CHANGE_ME_SECRETS_KEY/\${SECRETS_KEY}/" deployment/configurations/node/sage3-prod.hjson &&
                             cp .env deployment/.env &&
                             grep -q NODE_SERVER_REPLICAS deployment/.env    || echo NODE_SERVER_REPLICAS=1     >> deployment/.env &&
                             grep -q NODE_FILE_SERVER_REPLICAS deployment/.env || echo NODE_FILE_SERVER_REPLICAS=1 >> deployment/.env &&
@@ -164,6 +166,8 @@ pipeline {
                             fi &&
                             LDAP_PASS=\$(grep LDAP_BIND_PASSWORD .env | cut -d= -f2) &&
                             sed -i "s/CHANGE_ME_LDAP_PASS/\${LDAP_PASS}/" deployment/configurations/node/sage3-prod.hjson &&
+                            SECRETS_KEY=\$(grep SECRETS_ENCRYPTION_KEY .env | cut -d= -f2) &&
+                            sed -i "s/CHANGE_ME_SECRETS_KEY/\${SECRETS_KEY}/" deployment/configurations/node/sage3-prod.hjson &&
                             cp .env deployment/.env &&
                             grep -q NODE_SERVER_REPLICAS deployment/.env    || echo NODE_SERVER_REPLICAS=3     >> deployment/.env &&
                             grep -q NODE_FILE_SERVER_REPLICAS deployment/.env || echo NODE_FILE_SERVER_REPLICAS=1 >> deployment/.env &&
