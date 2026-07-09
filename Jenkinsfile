@@ -89,6 +89,34 @@ pipeline {
             }
         }
 
+        stage('E2E gate (staging)') {
+            // Only gates the full staging->prod release. Runs the Playwright smoke
+            // test against staging on the dedicated runner; a failure fails the build
+            // and prevents the Deploy Production stage below from running.
+            when { expression { params.DEPLOY_TARGET == 'both' } }
+            agent { label 'e2e' }
+            steps {
+                dir('e2e') {
+                    withCredentials([usernamePassword(credentialsId: 'sage3-e2e-ldap', usernameVariable: 'SAGE3_USER', passwordVariable: 'SAGE3_PASS')]) {
+                        sh '''
+                            set -e
+                            export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+                            export BASE_URL=https://sage3-staging.mediavirtuel.com
+                            # wait for staging to answer after the deploy (up -d returns before healthy)
+                            for i in $(seq 1 30); do curl -fsSk "$BASE_URL/api/info" >/dev/null 2>&1 && break; sleep 5; done
+                            npm install --no-audit --no-fund @playwright/test@1.61.1
+                            npx playwright test tests/smoke.spec.ts --project=chromium
+                        '''
+                    }
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'e2e/playwright-report/**, e2e/test-results/**', allowEmptyArchive: true
+                }
+            }
+        }
+
         stage('Deploy Production') {
             when {
                 expression { params.DEPLOY_TARGET == 'production' || params.DEPLOY_TARGET == 'both' }
