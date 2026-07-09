@@ -113,6 +113,20 @@ pipeline {
             post {
                 always {
                     archiveArtifacts artifacts: 'e2e/playwright-report/**, e2e/test-results/**', allowEmptyArchive: true
+                    // Also publish the report + video to the CIFS share, one folder per run,
+                    // and rotate anything older than 8 days.
+                    sh '''
+                        if mountpoint -q /mnt/donnees; then
+                            DEST="/mnt/donnees/e2e-reports/sage3/${BUILD_NUMBER}-$(date +%Y%m%d-%H%M%S)"
+                            mkdir -p "$DEST"
+                            cp -r e2e/playwright-report "$DEST"/ 2>/dev/null || true
+                            cp -r e2e/test-results   "$DEST"/ 2>/dev/null || true
+                            find /mnt/donnees/e2e-reports/sage3 -maxdepth 1 -mindepth 1 -type d -mtime +8 -exec rm -rf {} + 2>/dev/null || true
+                            echo "E2E artifacts -> $DEST"
+                        else
+                            echo "WARN: /mnt/donnees not mounted on this agent; skipping CIFS copy" >&2
+                        fi
+                    '''
                 }
             }
         }
