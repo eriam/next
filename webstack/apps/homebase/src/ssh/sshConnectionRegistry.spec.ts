@@ -101,7 +101,7 @@ describe('SSHConnectionRegistry', () => {
       credentialId: 'cred-1',
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, credentialId: 'cred-1' });
     expect(SBCredentialsDB.getDecryptedValue).toHaveBeenCalledWith('cred-1', 'user-1');
     const client = fakeClients[0];
     expect(client.lastExecCommand).toBe('tmux new -A -s sage3-app-1');
@@ -194,7 +194,7 @@ describe('SSHConnectionRegistry', () => {
     const createOrUpdate = jest.fn().mockResolvedValue({ id: 'new-cred-id' });
     (SBCredentialsDB as any).createOrUpdate = createOrUpdate;
 
-    await connectAndEmitReady('app-5', {
+    const result = await connectAndEmitReady('app-5', {
       host: 'example.com',
       port: 22,
       ownerId: 'user-1',
@@ -206,6 +206,10 @@ describe('SSHConnectionRegistry', () => {
       username: 'u',
       privateKey: 'key',
     });
+    // The caller has no other way to learn the id of a credential it didn't
+    // already have — without this, a later reconnect (e.g. leaving and
+    // returning to the board) has no credentialId to look up.
+    expect(result).toEqual({ success: true, credentialId: 'new-cred-id' });
   });
 
   it('does not persist a newCredential when the connect fails', async () => {
@@ -347,8 +351,8 @@ describe('SSHConnectionRegistry', () => {
     fakeClients[0].emit('ready');
 
     const [firstResult, secondResult] = await Promise.all([firstPromise, secondPromise]);
-    expect(firstResult).toEqual({ success: true });
-    expect(secondResult).toEqual({ success: true });
+    expect(firstResult).toEqual({ success: true, credentialId: 'cred-1' });
+    expect(secondResult).toEqual({ success: true, credentialId: 'cred-1' });
     expect(fakeClients.length).toBe(1);
     expect(registry.getConnection('app-12')).toBeDefined();
   });

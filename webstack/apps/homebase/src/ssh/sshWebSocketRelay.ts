@@ -56,6 +56,7 @@ export function attachSSHWebSocketServer(
 
     const url = new URL(req.url, 'http://localhost');
     const appId = url.searchParams.get('appId');
+    console.log('sshWebSocketRelay> connection received, appId=', appId, 'user=', req.user?.id);
     if (!appId) {
       socket.close();
       return;
@@ -108,8 +109,10 @@ export function attachSSHWebSocketServer(
     // Only the first viewer of an appId subscribes to the registry — every
     // subsequent viewer just gets added to the `viewers` Set above and rides
     // along on that single subscription's broadcast.
+    console.log('sshWebSocketRelay> subscribing viewer, has existing subscription=', unsubscribeByApp.has(appId));
     if (!unsubscribeByApp.has(appId)) {
       const unsubscribeOutput = registry.onOutput(appId, (data) => {
+        console.log('sshWebSocketRelay> broadcasting output, bytes=', data.length, 'viewers=', viewersByApp.get(appId)?.size);
         viewersByApp.get(appId)?.forEach((viewerSocket) => send(viewerSocket, { type: 'output', data }));
       });
       const unsubscribeStatus = registry.onStatus(appId, (status) => {
@@ -131,12 +134,15 @@ export function attachSSHWebSocketServer(
         return;
       }
 
-      const state = await getAppState(appId);
       if (message.type === 'input') {
+        const state = await getAppState(appId);
         if (state.controllerId !== req.user.id) return;
         registry.write(appId, message.data);
       } else if (message.type === 'resize') {
-        if (state.controllerId !== req.user.id) return;
+        // Unlike input, resize isn't sensitive to who sends it — any viewer
+        // fitting their own window should be able to trigger a redraw. tmux
+        // uses the smallest attached client's size across all viewers, so
+        // this is the same tradeoff any shared tmux session already has.
         registry.resize(appId, message.cols, message.rows);
       }
     });

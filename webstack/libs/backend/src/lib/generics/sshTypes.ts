@@ -14,4 +14,6 @@ export type ConnectParams = {
   newCredential?: { name: string; value: { type: 'sshPrivateKey'; username: string; privateKey: string; passphrase?: string } };
 };
 
-export type ConnectResult = { success: true } | { success: false; error: 'auth_failed' | 'unreachable' | 'tmux_failed' | 'credential_unavailable' };
+export type ConnectResult =
+  | { success: true; credentialId: string }
+  | { success: false; error: 'auth_failed' | 'unreachable' | 'tmux_failed' | 'credential_unavailable' };

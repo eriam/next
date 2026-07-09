@@ -115,7 +115,14 @@ function createPendingAttempt(appId: string): { client: Client; promise: Promise
 }
 
 function beginConnect(client: Client, host: string, port: number, credential: ResolvedCredential): void {
-  client.connect({ host, port, username: credential.username, privateKey: credential.privateKey, passphrase: credential.passphrase });
+  client.connect({
+    host,
+    port,
+    username: credential.username,
+    privateKey: credential.privateKey,
+    passphrase: credential.passphrase,
+    debug: (msg: string) => console.log(`SSHTerminal[debug]> ${msg}`),
+  });
 }
 
 // One full raw SSH+tmux connection attempt, credential already resolved —
@@ -203,15 +210,31 @@ export class SSHConnectionRegistry {
     this.connections.set(appId, connection);
     this.wireStream(appId, connection);
 
+    // The caller (frontend) needs this back to persist it in the app's own
+    // state — without it, leaving and returning to the board has no
+    // credentialId to reconnect with, and the connect attempt fails with
+    // credential_unavailable even though the credential exists.
+    let resolvedCredentialId = params.credentialId;
+
     if (params.newCredential && !params.credentialId) {
       try {
-        await SBCredentialsDB.createOrUpdate(params.ownerId, 'sshPrivateKey', params.newCredential.name, params.newCredential.value);
+        const saved = await SBCredentialsDB.createOrUpdate(
+          params.ownerId,
+          'sshPrivateKey',
+          params.newCredential.name,
+          params.newCredential.value
+        );
+        resolvedCredentialId = saved.id;
       } catch (error) {
         console.error(`Failed to persist newCredential for app ${appId}:`, error);
       }
     }
 
-    return { success: true };
+    if (!resolvedCredentialId) {
+      return { success: false, error: 'credential_unavailable' };
+    }
+
+    return { success: true, credentialId: resolvedCredentialId };
   }
 
   // Attaches data/stderr/close handlers to a connection's current stream.

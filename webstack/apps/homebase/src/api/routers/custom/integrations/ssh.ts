@@ -41,7 +41,7 @@ export function SSHIntegrationRouter(): express.Router {
       return;
     }
 
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, credentialId: result.credentialId });
   });
 
   return router;

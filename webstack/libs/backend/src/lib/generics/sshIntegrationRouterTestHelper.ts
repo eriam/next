@@ -42,7 +42,7 @@ export function SSHIntegrationRouterTestHelper(connect: (appId: string, params: 
       return;
     }
 
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, credentialId: result.credentialId });
   });
 
   return router;

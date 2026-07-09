@@ -134,8 +134,8 @@ describe('SSHTerminal setup form', () => {
     expect(screen.getByText('my-key')).toBeInTheDocument();
   });
 
-  it('calls POST /api/integrations/ssh/connect with the picked credential on submit', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
+  it('calls POST /api/integrations/ssh/connect with the picked credential on submit, then persists credentialId and ownerId', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, credentialId: 'cred-1' }) });
 
     render(<SSHTerminal.AppComponent {...buildApp()} />);
     fireEvent.change(screen.getByPlaceholderText(/host/i), { target: { value: 'example.com' } });
@@ -149,6 +149,17 @@ describe('SSHTerminal setup form', () => {
           method: 'POST',
           body: JSON.stringify({ appId: 'app-1', host: 'example.com', port: 22, credentialId: 'cred-1' }),
         })
+      )
+    );
+    // Both fields have to land in the app's own persisted state — not just
+    // this component's local state — because a later reconnect (after the
+    // last viewer leaves and the SSH connection is torn down) reads them
+    // from the app's saved state, not from whichever browser triggers it.
+    // Missing either one made every reconnect fail with credential_unavailable.
+    await waitFor(() =>
+      expect(mockUpdateState).toHaveBeenCalledWith(
+        'app-1',
+        expect.objectContaining({ credentialId: 'cred-1', ownerId: 'app-1-current-user' })
       )
     );
   });

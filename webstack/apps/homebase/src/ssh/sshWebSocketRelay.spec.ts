@@ -55,7 +55,7 @@ describe('sshWebSocketRelay', () => {
     jest.spyOn(registry, 'onStatus');
     jest.spyOn(registry, 'write').mockReturnValue(true);
     jest.spyOn(registry, 'resize').mockReturnValue(true);
-    jest.spyOn(registry, 'connect').mockResolvedValue({ success: true });
+    jest.spyOn(registry, 'connect').mockResolvedValue({ success: true, credentialId: 'cred-1' });
     jest.spyOn(registry, 'getConnection').mockReturnValue({} as any);
     jest.spyOn(registry, 'disconnect').mockImplementation(() => undefined);
   });

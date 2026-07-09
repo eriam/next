@@ -38,6 +38,7 @@ function SetupForm(props: App): JSX.Element {
 
   const { credentials, loading: credentialsLoading } = useCredentials('sshPrivateKey');
   const updateState = useAppStore((state) => state.updateState);
+  const { user } = useUser();
 
   // No existing key to pick from — go straight to the "enter a new key" form.
   useEffect(() => {
@@ -71,7 +72,26 @@ function SetupForm(props: App): JSX.Element {
         setError(ERROR_MESSAGES[data.error] || 'Connection failed.');
         return;
       }
-      updateState(props._id, { host, port, connected: true } as Partial<AppState>);
+      // credentialId comes back from the server rather than reusing the
+      // local `credentialId` state, since that's empty on the newCredential
+      // path — the server resolves it to whatever it just persisted. This
+      // has to be in the app's own state, not just this component's: when
+      // the last viewer leaves, the SSH connection is torn down, and a
+      // later reconnect (leaving and returning to the board) needs it to
+      // look up the credential again.
+      // ownerId is stored here too, not just credentialId — main.ts's
+      // getAppState() (used on every reconnect after the last viewer
+      // leaves) reads it from this app's own persisted state, not from
+      // whichever browser session triggers the reconnect. Without it,
+      // getDecryptedValue(credentialId, ownerId) never matches the
+      // credential's real owner and every reconnect fails.
+      updateState(props._id, {
+        host,
+        port,
+        credentialId: data.credentialId,
+        ownerId: user?._id,
+        connected: true,
+      } as Partial<AppState>);
     } finally {
       setConnecting(false);
     }
@@ -164,11 +184,44 @@ function TerminalView(props: App): JSX.Element {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ssh?appId=${props._id}`);
+    const wsUrl = `${protocol}//${window.location.host}/ssh?appId=${props._id}`;
+    console.log('SSHTerminal> opening WebSocket', wsUrl);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('SSHTerminal> WebSocket open');
+      // A viewer joining an already-running tmux session only receives output
+      // emitted after it connects; a static screen (an idle shell prompt) would
+      // stay blank until the next keystroke. A *same-size* resize is a no-op in
+      // tmux, so it won't repaint. Jiggle the row count by one and restore it —
+      // the size CHANGE forces tmux to redraw its full current screen, which is
+      // the only reliable way a fresh viewer sees the existing prompt.
+      fitAddon.fit();
+      const { cols, rows } = term;
+      ws.send(JSON.stringify({ type: 'resize', cols, rows: Math.max(1, rows - 1) }));
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+      }, 120);
+    };
+
+    ws.onerror = (event) => {
+      console.error('SSHTerminal> WebSocket error', event);
+    };
+
+    ws.onclose = (event) => {
+      console.log('SSHTerminal> WebSocket closed', event?.code, event?.reason);
+    };
 
     ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'output') {
+      let message: { type: string; data?: string; connected?: boolean };
+      try {
+        message = JSON.parse(event.data);
+      } catch (err) {
+        console.error('SSHTerminal> failed to parse WebSocket message', event.data, err);
+        return;
+      }
+      console.log('SSHTerminal> received message', message);
+      if (message.type === 'output' && message.data !== undefined) {
         term.write(message.data);
       } else if (message.type === 'status') {
         updateState(props._id, { connected: message.connected } as Partial<AppState>);
