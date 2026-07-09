@@ -16,3 +16,4 @@ export * from './kernels';
 export * from './ai/agent-router';
 export * from './credentials';
 export * from './integrations/ctfd';
+export * from './integrations/ssh';

@@ -26,6 +26,8 @@ import * as dns from 'node:dns';
 import { WebSocket } from 'ws';
 import { SAGEnlp, SAGE_PRESENCE, SocketPresence, SubscriptionCache } from '@sage3/backend';
 import { setupWsforLogs } from './api/routers/custom';
+import { attachSSHWebSocketServer } from './ssh/sshWebSocketRelay';
+import { sshConnectionRegistry } from './ssh/sshConnectionRegistry';
 
 // Create the web server with Express
 import { createApp, listenApp, serveApp } from './web';
@@ -135,8 +137,21 @@ async function startServer() {
 
   const logsServer = new WebSocket.Server({ noServer: true });
 
+  const sshTerminalServer = new WebSocket.Server({ noServer: true });
+
   logsServer.on('connection', (socket: WebSocket) => {
     setupWsforLogs(socket);
+  });
+
+  // Relay browser <-> shared per-appId SSH/tmux connection. The relay reads
+  // the app's current state (host/port/ownerId/credentialId/controllerId)
+  // from Redis on every connection and every message, rather than trusting
+  // anything cached from connection time — see sshWebSocketRelay.ts for why.
+  attachSSHWebSocketServer(sshTerminalServer, sshConnectionRegistry, async (appId: string) => {
+    const app = await AppsCollection.get(appId);
+    if (!app) throw new Error(`SSHTerminal> app ${appId} not found`);
+    const state = app.data.state as { host: string; port: number; ownerId: string; credentialId?: string; controllerId?: string };
+    return { host: state.host, port: state.port, ownerId: state.ownerId, credentialId: state.credentialId, controllerId: state.controllerId };
   });
 
   // Load Redis Presnce
@@ -180,8 +195,8 @@ async function startServer() {
     // get url path
     const pathname = request.url;
     if (!pathname) return;
-    // get the first word of the url
-    const wsPath = pathname.split('/')[1];
+    // get the first path segment of the url, ignoring any query string
+    const wsPath = pathname.split('?')[0].split('/')[1];
 
     // Logs socket - noauth for now
     if (wsPath === 'logs') {
@@ -225,6 +240,10 @@ async function startServer() {
                 apiWebSocketServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
                   apiWebSocketServer.emit('connection', ws, req);
                 });
+              } else if (wsPath === 'ssh') {
+                sshTerminalServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+                  sshTerminalServer.emit('connection', ws, req);
+                });
               }
             }
           }
@@ -243,6 +262,11 @@ async function startServer() {
             req.user = req.session.passport?.user;
             apiWebSocketServer.emit('connection', ws, req);
           });
+        } else if (wsPath === 'ssh') {
+          sshTerminalServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+            req.user = req.session.passport?.user;
+            sshTerminalServer.emit('connection', ws, req);
+          });
         }
       }
     });
@@ -258,6 +282,7 @@ async function startServer() {
     console.log('ExitHandler> disconnect sockets');
     apiWebSocketServer.close();
     logsServer.close();
+    sshTerminalServer.close();
     process.exit(2);
   }
 
