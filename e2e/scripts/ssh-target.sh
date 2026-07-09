@@ -28,6 +28,12 @@ up() {
     -e "PUBLIC_KEY=$(cat "$KEY.pub")" \
     -p "${PORT}:2222" \
     linuxserver/openssh-server:latest >/dev/null
+  # homebase runs the shell inside tmux on the remote host, so the target needs tmux.
+  # The base image (Alpine) ships without it; install it into the running container.
+  for _ in $(seq 1 30); do
+    if docker exec "$NAME" apk add --no-cache tmux >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
   # Wait for sshd to accept connections.
   for _ in $(seq 1 30); do
     if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 \

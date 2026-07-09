@@ -109,6 +109,19 @@ export async function freshBoard(page: Page) {
 }
 
 /**
+ * Add an app to the current board from the Applications menu. The menu lists one
+ * button per enabled app (label == the app's type name, e.g. "SSHTerminal");
+ * clicking it creates the app at board centre. Selectors from ApplicationsMenu.tsx
+ * / MenuButton.tsx (Chakra Button with the app name as its text).
+ */
+export async function addApp(page: Page, appName: string): Promise<void> {
+  await page.locator('[aria-label="Open Applications Menu"]').click();
+  await page.getByRole('button', { name: appName, exact: true }).click();
+  // Close the menu so it doesn't overlap the new app's UI.
+  await page.keyboard.press('Escape');
+}
+
+/**
  * Delete a room by name (Room options -> Settings -> Delete -> confirm). Navigates
  * home first, so it works from anywhere. Best-effort: never throws, so it's safe
  * to call from teardown without failing an otherwise-passing test.
@@ -134,6 +147,31 @@ export async function deleteRoom(page: Page, roomName: string): Promise<void> {
   } catch {
     /* best-effort teardown cleanup */
   }
+}
+
+/**
+ * Delete every credential whose name starts with the e2e prefix, via the REST API
+ * (page.request shares the logged-in context's session cookie). The SSH specs create
+ * a stored sshPrivateKey credential on every connect-with-new-key; without this they
+ * pile up on the shared test account. Assumes the page is already logged in.
+ * Best-effort — never throws.
+ */
+export async function deleteAllE2ECredentials(page: Page, prefix = 'e2e-'): Promise<number> {
+  let deleted = 0;
+  try {
+    const resp = await page.request.get('/api/credentials');
+    if (!resp.ok()) return 0;
+    const list = (await resp.json()) as Array<{ id: string; name: string }>;
+    for (const c of list) {
+      if (typeof c?.name === 'string' && c.name.startsWith(prefix)) {
+        const d = await page.request.delete(`/api/credentials/${c.id}`);
+        if (d.ok()) deleted++;
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
+  return deleted;
 }
 
 /** Delete every room whose name starts with the e2e prefix. Used by global teardown. */

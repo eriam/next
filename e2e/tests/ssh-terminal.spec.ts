@@ -1,50 +1,201 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page, Locator } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginLdap, enterAnyBoard } from '../fixtures/sage3';
+import { freshBoard, addApp, enterRoom, enterBoard, createRoom, createBoard } from '../fixtures/sage3';
 
 /**
- * SSHTerminal app — real end-to-end: place the app, connect (server-side dials a real sshd),
- * run a command, and see real output.
+ * SSHTerminal app — real end-to-end. The server (homebase) dials a real sshd, starts
+ * tmux, and relays the PTY over a WebSocket; the app renders it with xterm.js.
  *
- * Requires a reachable sshd target — bring one up with `scripts/ssh-target.sh up`, which prints
- * SSH_TARGET_HOST/PORT/USER and writes a private key. IMPORTANT: the target must be reachable
- * from the app-under-test's *backend* (homebase), not just from this runner, since homebase makes
- * the SSH connection. On the shared runner, expose it on the reserved 2200-2299 range.
+ * Requires a reachable sshd target — bring one up with `scripts/ssh-target.sh up`.
+ * IMPORTANT: the target must be reachable from the app-under-test's *backend*
+ * (homebase), not just from this runner, since homebase makes the SSH connection.
+ * Set SSH_TARGET_HOST to the runner's LAN IP (not 127.0.0.1) so the staging/prod
+ * homebase container can dial it.
  *
- * Setup-form selectors are verbatim from SSHTerminal.tsx (Host/Port inputs, new-credential link,
- * Username / "Private key (paste the full contents)" / "Name (e.g. my-server-key)", Connect).
- * TODO(runner): confirm the "add SSHTerminal app to the board" gesture against the live app menu.
+ * Form + terminal selectors are verbatim from SSHTerminal.tsx.
  */
 const host = process.env.SSH_TARGET_HOST;
 const port = process.env.SSH_TARGET_PORT || '2222';
 const user = process.env.SSH_TARGET_USER || 'e2e';
-const keyPath = process.env.SSH_TARGET_KEY_PATH; // path to the private key ssh-target.sh generated
+const keyPath = process.env.SSH_TARGET_KEY_PATH; // private key that scripts/ssh-target.sh generated
 
 test.skip(!host || !keyPath, 'SSH_TARGET_HOST and SSH_TARGET_KEY_PATH must be set (run scripts/ssh-target.sh up)');
 
-test('connect the SSH terminal to a real host and run a command', async ({ page }) => {
-  const privateKey = readFileSync(keyPath as string, 'utf8');
+const privateKey = keyPath ? readFileSync(keyPath, 'utf8') : '';
 
-  await loginLdap(page);
-  await enterAnyBoard(page);
+// The SSHTerminal app window is small; its drag/resize "handle" overlays the edges
+// and intercepts pointer events on controls near the bottom. Dispatch the click
+// straight to the element (React's delegated onClick still fires) so the overlay
+// can't swallow it.
+async function clickInApp(locator: Locator): Promise<void> {
+  await expect(locator).toBeVisible();
+  await locator.dispatchEvent('click');
+}
 
-  // TODO(runner): open the app menu and add "SSHTerminal" to the board. Placeholder gesture:
-  await page.getByRole('button', { name: /applications|apps/i }).first().click();
-  await page.getByRole('menuitem', { name: /ssh ?terminal/i }).click();
+// Fill the SetupForm's "new SSH key" variant and connect. The form auto-shows the
+// new-key fields when the account has no sshPrivateKey credentials; if a previous
+// run left one, flip to it explicitly.
+async function connectWithNewKey(
+  page: Page,
+  opts: { host: string; port: string; user: string; key: string; name: string }
+): Promise<void> {
+  await page.getByPlaceholder('Host').fill(opts.host);
+  await page.getByPlaceholder('Port').fill(opts.port);
+  // Force the new-key variant regardless of whether the account already has stored
+  // sshPrivateKey credentials (which flips the form to a radio list of them).
+  if (!(await page.getByText('New SSH key').isVisible().catch(() => false))) {
+    await clickInApp(page.getByRole('button', { name: /use a new key instead/i }));
+  }
+  await page.getByPlaceholder('Name (e.g. my-server-key)').fill(opts.name);
+  await page.getByPlaceholder('Username').fill(opts.user);
+  await page.getByPlaceholder(/Private key \(paste the full contents/).fill(opts.key);
+  await clickInApp(page.getByRole('button', { name: 'Connect' }));
+}
 
-  // Setup form.
-  const app = page.locator('.sage3-app', { hasText: 'Host' }).last();
-  await app.getByPlaceholder('Host').fill(host as string);
-  await app.getByPlaceholder('Port').fill(String(port));
-  await app.getByRole('button', { name: /new credential|create/i }).click();
-  await app.getByPlaceholder('Name (e.g. my-server-key)').fill(`e2e-ssh-${Date.now()}`);
-  await app.getByPlaceholder('Username').fill(user);
-  await app.getByPlaceholder('Private key (paste the full contents)').fill(privateKey);
-  await app.getByRole('button', { name: 'Connect' }).click();
+// Place an SSHTerminal, connect it to the good target with a fresh key, and wait for
+// the live terminal to render.
+async function placeAndConnect(page: Page, name: string): Promise<void> {
+  await addApp(page, 'SSHTerminal');
+  await connectWithNewKey(page, { host: host as string, port, user, key: privateKey, name });
+  await expect(page.locator('.xterm')).toBeVisible({ timeout: 30_000 });
+}
 
-  // The xterm terminal should render and, after we type a command, echo real output.
-  const term = app.locator('.xterm');
-  await expect(term).toBeVisible({ timeout: 30_000 });
-  await app.locator('.xterm-helper-textarea').fill('whoami\n');
-  await expect(app.locator('.xterm-rows')).toContainText(user, { timeout: 15_000 });
+// Type a shell command into the terminal via real key events (xterm listens to key
+// events, not textarea.fill). Becomes the controller first if it isn't already —
+// the creator is NOT the controller by default.
+async function runCommand(page: Page, command: string): Promise<void> {
+  const takeControl = page.getByRole('button', { name: /take control/i });
+  if (await takeControl.isVisible().catch(() => false)) await clickInApp(takeControl);
+  // Focus xterm's hidden input directly — clicking it is intercepted by the app
+  // window's resize handle, and focus() needs no clickability.
+  await page.locator('.xterm-helper-textarea').focus();
+  await page.keyboard.type(command);
+  await page.keyboard.press('Enter');
+}
+
+test('connect to a real host with a new key and run a command', async ({ page }) => {
+  await freshBoard(page);
+  await placeAndConnect(page, `e2e-ssh-${Date.now()}`);
+
+  // `echo e2e-$((6*7))` -> "e2e-42": the typed line contains "6*7", so only real
+  // remote execution can produce "e2e-42" in the output.
+  await runCommand(page, 'echo e2e-$((6*7))');
+  await expect(page.locator('.xterm-rows')).toContainText('e2e-42', { timeout: 15_000 });
+});
+
+test('connect by picking an existing stored credential', async ({ page }) => {
+  const credName = `e2e-reuse-${Date.now()}`;
+  // Board 1: connect once with a new key — this is what persists the credential.
+  // (The terminal rendering means the connect POST returned, i.e. the credential
+  // is already stored.)
+  await freshBoard(page);
+  await placeAndConnect(page, credName);
+
+  // Board 2: a fresh app now offers the stored credential as a radio (the
+  // credentialId path), instead of the new-key fields.
+  await page.goto('/#/home');
+  const room2 = await createRoom(page);
+  await enterRoom(page, room2);
+  const board2 = await createBoard(page);
+  await enterBoard(page, board2);
+
+  await addApp(page, 'SSHTerminal');
+  await page.getByPlaceholder('Host').fill(host as string);
+  await page.getByPlaceholder('Port').fill(port);
+  // Chakra hides the native radio input behind a styled control; clicking the
+  // label (a real click, which forwards activation to the input) is what actually
+  // selects the stored credential.
+  await expect(page.getByRole('radio', { name: credName })).toBeAttached({ timeout: 15_000 });
+  await clickInApp(page.locator('label.chakra-radio', { hasText: credName }));
+  await clickInApp(page.getByRole('button', { name: 'Connect' }));
+
+  await expect(page.locator('.xterm')).toBeVisible({ timeout: 30_000 });
+  await runCommand(page, 'echo reuse-$((5*5))');
+  await expect(page.locator('.xterm-rows')).toContainText('reuse-25', { timeout: 15_000 });
+});
+
+test('renders ANSI colors (xterm-256color PTY)', async ({ page }) => {
+  await freshBoard(page);
+  await placeAndConnect(page, `e2e-color-${Date.now()}`);
+  // Emit red text; with a 256-color PTY xterm renders SGR colors as foreground-class
+  // spans (a vt100 PTY would render everything monochrome). tmux's own coloured
+  // status bar also depends on this, so a coloured span proves the PTY negotiated colour.
+  await runCommand(page, "printf '\\033[31mCOLORMARK\\033[0m\\n'");
+  await expect(page.locator('.xterm-rows')).toContainText('COLORMARK', { timeout: 15_000 });
+  await expect(page.locator('.xterm-rows span[class*="xterm-fg-"]').first()).toBeVisible({ timeout: 15_000 });
+});
+
+test('shows a clear error when the host is unreachable', async ({ page }) => {
+  await freshBoard(page);
+  await addApp(page, 'SSHTerminal');
+  // Nothing listens on 2202 on the target; the backend's dial is refused.
+  await connectWithNewKey(page, {
+    host: host as string,
+    port: '2202',
+    user,
+    key: privateKey,
+    name: `e2e-unreach-${Date.now()}`,
+  });
+  await expect(page.getByText('Could not reach that host.')).toBeVisible({ timeout: 30_000 });
+  // Still on the setup form — no terminal.
+  await expect(page.locator('.xterm')).toHaveCount(0);
+});
+
+test('shows a clear error when authentication fails', async ({ page }) => {
+  await freshBoard(page);
+  await addApp(page, 'SSHTerminal');
+  // Right host + key, but a username the key isn't authorized for -> auth failure.
+  await connectWithNewKey(page, {
+    host: host as string,
+    port,
+    user: 'wronguser',
+    key: privateKey,
+    name: `e2e-auth-${Date.now()}`,
+  });
+  await expect(page.getByText(/Authentication failed/i)).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.xterm')).toHaveCount(0);
+});
+
+test('input is gated to the controller (take control)', async ({ page }) => {
+  await freshBoard(page);
+  await placeAndConnect(page, `e2e-ctrl-${Date.now()}`);
+
+  // The creator is a viewer, not the controller: the button is offered and typing
+  // is ignored (input only relays from the controllerId).
+  const takeControl = page.getByRole('button', { name: /take control/i });
+  await expect(takeControl).toBeVisible();
+  await page.locator('.xterm-helper-textarea').focus();
+  await page.keyboard.type('echo BEFORE_$((1+1))');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(1500);
+  await expect(page.locator('.xterm-rows')).not.toContainText('BEFORE_2');
+
+  // Taking control clears the button and lets input through.
+  await clickInApp(takeControl);
+  await expect(takeControl).toBeHidden();
+  await page.locator('.xterm-helper-textarea').focus();
+  await page.keyboard.type('echo AFTER_$((1+1))');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.xterm-rows')).toContainText('AFTER_2', { timeout: 15_000 });
+});
+
+test('reconnects to the session after leaving and re-entering the board', async ({ page }) => {
+  const { room, board } = await freshBoard(page);
+  await placeAndConnect(page, `e2e-recon-${Date.now()}`);
+  await runCommand(page, 'echo FIRST_$((2+2))');
+  await expect(page.locator('.xterm-rows')).toContainText('FIRST_4', { timeout: 15_000 });
+
+  // Leave the board entirely (tears down the last viewer's connection), then return.
+  await page.goto('/#/home');
+  await expect(page).toHaveURL(/#\/home/);
+  await enterRoom(page, room);
+  await enterBoard(page, board);
+
+  // The app persists its host state, so it re-mounts straight into the terminal and
+  // the backend re-establishes SSH+tmux from the app's stored ownerId/credentialId,
+  // reattaching to the SAME persistent tmux session. A brand-new xterm instance
+  // showing the pre-existing "FIRST_4" output can only have come from the server
+  // replaying the reattached session — proof the reconnect path works.
+  await expect(page.locator('.xterm')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.xterm-rows')).toContainText('FIRST_4', { timeout: 30_000 });
 });
