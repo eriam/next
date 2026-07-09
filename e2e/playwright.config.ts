@@ -16,6 +16,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
+  // Sweep e2e-* rooms created during the run so the shared test account stays clean.
+  globalTeardown: './global-teardown.ts',
   fullyParallel: false, // these tests mutate shared server state; keep them serial
   workers: 1,
   retries: process.env.CI ? 1 : 0,

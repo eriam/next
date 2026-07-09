@@ -107,3 +107,51 @@ export async function freshBoard(page: Page) {
   await enterBoard(page, board);
   return { room, board };
 }
+
+/**
+ * Delete a room by name (Room options -> Settings -> Delete -> confirm). Navigates
+ * home first, so it works from anywhere. Best-effort: never throws, so it's safe
+ * to call from teardown without failing an otherwise-passing test.
+ */
+export async function deleteRoom(page: Page, roomName: string): Promise<void> {
+  try {
+    await page.goto('/#/home');
+    await expect(page).toHaveURL(/#\/home/);
+    const roomLink = page.getByText(roomName, { exact: false }).first();
+    if (!(await roomLink.isVisible().catch(() => false))) return; // already gone
+    await roomLink.click();
+    await expect(page).toHaveURL(/#\/home\/room\//);
+    await page.locator('[aria-label="Room options"]').first().click();
+    await page.getByRole('menuitem', { name: 'Settings' }).click();
+    const dialog = page.getByRole('dialog');
+    // The Delete button arms an inline confirm (still one Delete button); clicking
+    // it again confirms and deletes the room.
+    const del = dialog.getByRole('button', { name: 'Delete', exact: true });
+    await del.click();
+    await page.waitForTimeout(400);
+    await del.click();
+    await page.waitForTimeout(1000);
+  } catch {
+    /* best-effort teardown cleanup */
+  }
+}
+
+/** Delete every room whose name starts with the e2e prefix. Used by global teardown. */
+export async function deleteAllE2ERooms(page: Page, prefix = 'e2e-'): Promise<number> {
+  await loginLdap(page);
+  let deleted = 0;
+  // Re-query each pass, since deleting reflows the list.
+  for (let i = 0; i < 100; i++) {
+    await page.goto('/#/home');
+    await expect(page).toHaveURL(/#\/home/);
+    const names = await page
+      .locator(`text=/${prefix}/`)
+      .evaluateAll((els) => [...new Set(els.map((e) => (e as HTMLElement).innerText.trim()).filter((t) => t.startsWith('e2e-')))]);
+    // keep only room-looking names (rooms start with e2e-room / e2e-smoke etc.)
+    const roomNames = names.filter((n) => /^e2e-(room|smoke)/.test(n));
+    if (roomNames.length === 0) break;
+    await deleteRoom(page, roomNames[0]);
+    deleted++;
+  }
+  return deleted;
+}
