@@ -7,6 +7,7 @@ pipeline {
 
     parameters {
         choice(name: 'DEPLOY_TARGET', choices: ['staging', 'production', 'both', 'none'], description: 'Cible de déploiement')
+        booleanParam(name: 'RUN_E2E', defaultValue: true, description: 'Run the Playwright E2E gate before Deploy Production (uncheck for environments without the e2e runner)')
     }
 
     environment {
@@ -93,20 +94,30 @@ pipeline {
             // Only gates the full staging->prod release. Runs the Playwright smoke
             // test against staging on the dedicated runner; a failure fails the build
             // and prevents the Deploy Production stage below from running.
-            when { expression { params.DEPLOY_TARGET == 'both' } }
+            when { expression { params.DEPLOY_TARGET == 'both' && params.RUN_E2E } }
             agent { label 'e2e' }
             steps {
-                dir('e2e') {
-                    withCredentials([usernamePassword(credentialsId: 'sage3-e2e-ldap', usernameVariable: 'SAGE3_USER', passwordVariable: 'SAGE3_PASS')]) {
-                        sh '''
-                            set -e
-                            export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-                            export BASE_URL=https://sage3-staging.mediavirtuel.com
-                            # wait for staging to answer after the deploy (up -d returns before healthy)
-                            for i in $(seq 1 30); do curl -fsSk "$BASE_URL/api/info" >/dev/null 2>&1 && break; sleep 5; done
-                            npm install --no-audit --no-fund @playwright/test@1.61.1
-                            npx playwright test tests/smoke.spec.ts --project=chromium
-                        '''
+                script {
+                    // Fail-open on missing infra: if this agent has no Playwright / browser
+                    // cache, skip the gate (prod still deploys) rather than blocking on it.
+                    // A real test failure below still fails the build and blocks production.
+                    def e2eReady = sh(script: 'command -v npx >/dev/null 2>&1 && test -d /opt/ms-playwright', returnStatus: true) == 0
+                    if (!e2eReady) {
+                        echo 'WARNING: Playwright / browser cache not found on this agent — SKIPPING the E2E gate. Production will deploy without E2E validation.'
+                    } else {
+                        dir('e2e') {
+                            withCredentials([usernamePassword(credentialsId: 'sage3-e2e-ldap', usernameVariable: 'SAGE3_USER', passwordVariable: 'SAGE3_PASS')]) {
+                                sh '''
+                                    set -e
+                                    export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+                                    export BASE_URL=https://sage3-staging.mediavirtuel.com
+                                    # wait for staging to answer after the deploy (up -d returns before healthy)
+                                    for i in $(seq 1 30); do curl -fsSk "$BASE_URL/api/info" >/dev/null 2>&1 && break; sleep 5; done
+                                    npm install --no-audit --no-fund @playwright/test@1.61.1
+                                    npx playwright test tests/smoke.spec.ts --project=chromium
+                                '''
+                            }
+                        }
                     }
                 }
             }

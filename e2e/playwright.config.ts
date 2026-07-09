@@ -30,6 +30,9 @@ export default defineConfig({
     ignoreHTTPSErrors: true, // origin pin / self-signed staging certs
     actionTimeout: 15_000,
     navigationTimeout: 20_000,
+    // Slow each action so the recorded video plays at a human-watchable pace.
+    // Override with SLOWMO_MS=0 for a fast (headless CI) run.
+    launchOptions: { slowMo: Number(process.env.SLOWMO_MS ?? 500) },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });
