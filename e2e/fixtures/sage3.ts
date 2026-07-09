@@ -29,9 +29,22 @@ export async function loginLdap(page: Page) {
   await page.locator('input[name="password"]').fill(pass);
   await Promise.all([
     page.waitForURL((url) => !/error=/.test(url.href), { timeout: 20_000 }),
-    page.getByRole('button', { name: 'Login with LDAP' }).click(),
+    // The form has both an aria-label'd icon button and the type=submit button
+    // sharing the name "Login with LDAP"; target the submit one unambiguously.
+    page.locator('form[action="/auth/ldap"] button[type="submit"]').click(),
   ]);
   await expect(page, 'LDAP login must not be rejected').not.toHaveURL(/error=ldap_failed/);
+
+  // A user's first-ever login lands on the account/profile creation page
+  // (CreateUserModal: required "First name" + "Create Account"). Complete it once;
+  // on later logins this step is absent and we're already on home.
+  const createAccount = page.getByRole('button', { name: 'Create Account' });
+  if (await createAccount.isVisible().catch(() => false)) {
+    await page.getByPlaceholder('First name').fill(user);
+    await createAccount.click();
+  }
+  // Account creation leaves the createuser page; land on the app (home).
+  await expect(page).not.toHaveURL(/createuser/, { timeout: 20_000 });
 }
 
 /**
