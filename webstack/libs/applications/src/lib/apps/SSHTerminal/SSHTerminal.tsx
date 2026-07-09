@@ -190,13 +190,18 @@ function TerminalView(props: App): JSX.Element {
 
     ws.onopen = () => {
       console.log('SSHTerminal> WebSocket open');
-      // A viewer joining an already-running tmux session only receives
-      // output emitted after this point — anything printed before they
-      // connected is gone. Sending a resize (even to the same size xterm
-      // already fit to) forces tmux to redraw its current screen state,
-      // which is the only way a fresh viewer sees the existing prompt.
+      // A viewer joining an already-running tmux session only receives output
+      // emitted after it connects; a static screen (an idle shell prompt) would
+      // stay blank until the next keystroke. A *same-size* resize is a no-op in
+      // tmux, so it won't repaint. Jiggle the row count by one and restore it —
+      // the size CHANGE forces tmux to redraw its full current screen, which is
+      // the only reliable way a fresh viewer sees the existing prompt.
       fitAddon.fit();
-      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      const { cols, rows } = term;
+      ws.send(JSON.stringify({ type: 'resize', cols, rows: Math.max(1, rows - 1) }));
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+      }, 120);
     };
 
     ws.onerror = (event) => {
