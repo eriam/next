@@ -96,7 +96,7 @@ function createPendingAttempt(appId: string): { client: Client; promise: Promise
   };
 
   client.on('ready', () => {
-    client.exec(`tmux new -A -s ${tmuxSessionName(appId)}`, { pty: true }, (execErr, stream) => {
+    client.exec(`tmux new -A -s ${tmuxSessionName(appId)}`, { pty: { term: 'xterm-256color' } }, (execErr, stream) => {
       if (execErr || !stream) {
         client.end();
         tryResolve({ success: false, error: 'tmux_failed' });
