@@ -181,4 +181,29 @@ test.describe('Credentials', () => {
       await page.request.delete(`/api/credentials/${aId}`); // clean up A's credential
     }
   });
+
+  test("a user cannot delete another user's credential", async ({ page, browser }) => {
+    test.skip(!process.env.SAGE3_USER2, 'SAGE3_USER2 / SAGE3_PASS2 required for the cross-user test');
+    await login(page);
+    const name = `e2e-delauth-${Date.now()}`;
+    const create = await page.request.post('/api/credentials', {
+      data: { name, type: 'secretText', value: { type: 'secretText', secret: 's' } },
+    });
+    const aId = (await create.json()).id as string;
+
+    const ctxB = await browser.newContext({ ignoreHTTPSErrors: true });
+    const pageB = await ctxB.newPage();
+    try {
+      await login(pageB, creds2());
+      // B tries to delete A's credential by id — the delete is owner-scoped.
+      const del = await pageB.request.delete(`/api/credentials/${aId}`);
+      expect(del.ok()).toBeFalsy();
+      // A's credential is still there.
+      const mine = ((await (await page.request.get('/api/credentials')).json()) as Array<{ id: string }>).some((c) => c.id === aId);
+      expect(mine).toBeTruthy();
+    } finally {
+      await ctxB.close();
+      await page.request.delete(`/api/credentials/${aId}`);
+    }
+  });
 });
