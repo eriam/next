@@ -93,9 +93,10 @@ pipeline {
         }
 
         stage('E2E gate (staging)') {
-            // Only gates the full staging->prod release. Runs the Playwright smoke
-            // test against staging on the dedicated runner; a failure fails the build
-            // and prevents the Deploy Production stage below from running.
+            // Only gates the full staging->prod release. Runs the Playwright functional
+            // suite (smoke + rooms/boards + credentials + app availability + SSH terminal)
+            // against staging on the dedicated runner; a failure fails the build and
+            // prevents the Deploy Production stage below from running.
             when { expression { params.DEPLOY_TARGET == 'both' && params.RUN_E2E } }
             agent { label 'e2e' }
             steps {
@@ -113,10 +114,35 @@ pipeline {
                                     set -e
                                     export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
                                     export BASE_URL=https://sage3-staging.mediavirtuel.com
+                                    # Slow each action enough to clear open-animation races. The suite is
+                                    # validated at >=120ms; SLOWMO_MS=0 is known to race the shared fixtures.
+                                    export SLOWMO_MS=150
                                     # wait for staging to answer after the deploy (up -d returns before healthy)
                                     for i in $(seq 1 30); do curl -fsSk "$BASE_URL/api/info" >/dev/null 2>&1 && break; sleep 5; done
                                     npm install --no-audit --no-fund @playwright/test@1.61.1
-                                    npx playwright test tests/smoke.spec.ts --project=chromium
+
+                                    # Best-effort: stand up a throwaway sshd target for the SSH-terminal spec.
+                                    # staging's homebase must reach it, so advertise the runner's LAN IP. If
+                                    # docker is unavailable or bring-up fails, the SSH tests test.skip themselves
+                                    # (SSH_TARGET_* stay unset) and the rest of the suite still gates the release.
+                                    SSH_UP=0
+                                    if command -v docker >/dev/null 2>&1; then
+                                        if SSH_ENV="$(SSH_TARGET_PORT=2201 SSH_TARGET_USER=e2e bash scripts/ssh-target.sh up)"; then
+                                            eval "$SSH_ENV"
+                                            LAN_IP="$(hostname -I | tr ' ' '\\n' | grep -E '^192\\.168\\.' | head -1)"
+                                            [ -n "$LAN_IP" ] && export SSH_TARGET_HOST="$LAN_IP"
+                                            SSH_UP=1
+                                        fi
+                                    fi
+
+                                    set +e
+                                    npx playwright test --project=chromium
+                                    RC=$?
+                                    set -e
+
+                                    # Always tear the target down (even on a partial bring-up or test failure).
+                                    command -v docker >/dev/null 2>&1 && SSH_TARGET_PORT=2201 bash scripts/ssh-target.sh down || true
+                                    exit $RC
                                 '''
                             }
                         }
