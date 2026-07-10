@@ -116,6 +116,12 @@ pipeline {
                                     export BASE_URL=https://sage3-staging.mediavirtuel.com
                                     # The specs default to guest login; our instances use LDAP.
                                     export SAGE3_AUTH=ldap
+                                    # Second LAB.LOCAL account for the cross-user tests (owner isolation,
+                                    # control transfer, credential-delete authz). It shares the password
+                                    # scheme with the primary account, so reuse SAGE3_PASS rather than a
+                                    # second Jenkins credential. If unset, those tests test.skip themselves.
+                                    export SAGE3_USER2=e2e-test2
+                                    export SAGE3_PASS2="$SAGE3_PASS"
                                     # Slow each action enough to clear open-animation races. The suite is
                                     # validated at >=120ms; SLOWMO_MS=0 is known to race the shared fixtures.
                                     export SLOWMO_MS=150
