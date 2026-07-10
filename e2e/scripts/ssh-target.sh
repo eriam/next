@@ -21,6 +21,12 @@ KEY="$KEYDIR/id_e2e"
 up() {
   mkdir -p "$KEYDIR"
   [ -f "$KEY" ] || ssh-keygen -t ed25519 -N '' -f "$KEY" -C 'sage3-e2e' >/dev/null
+  # A passphrase-protected COPY of the same key. Same public key, so it's already
+  # authorized on the target — lets a test exercise the passphrase code path.
+  if [ ! -f "$KEY.pass" ]; then
+    cp "$KEY" "$KEY.pass"
+    ssh-keygen -p -f "$KEY.pass" -P '' -N 'e2e-passphrase' >/dev/null
+  fi
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   docker run -d --name "$NAME" \
     -e PUID=1000 -e PGID=1000 -e TZ=UTC \
@@ -44,6 +50,8 @@ up() {
   echo "export SSH_TARGET_PORT=$PORT"
   echo "export SSH_TARGET_USER=$USER_NAME"
   echo "export SSH_TARGET_KEY_PATH=$KEY"
+  echo "export SSH_TARGET_PASS_KEY_PATH=$KEY.pass"
+  echo "export SSH_TARGET_PASSPHRASE=e2e-passphrase"
 }
 
 down() {

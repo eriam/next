@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { freshBoard, openSettings } from '../fixtures/sage3';
+import { freshBoard, openSettings, addApp } from '../fixtures/sage3';
 
 /**
  * The features are only usable if they're actually surfaced in the UI: the
@@ -18,5 +18,22 @@ test.describe('App availability', () => {
     await freshBoard(page);
     const settings = await openSettings(page, /credentials/i);
     await expect(settings.getByRole('tab', { name: /credentials/i })).toBeVisible();
+  });
+
+  test('placing an app from the menu renders it on the board', async ({ page }) => {
+    await freshBoard(page);
+    await addApp(page, 'Stickie');
+    // A Stickie renders its editable note textarea.
+    await expect(page.getByPlaceholder('Type here...').first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('all user Settings tabs are present and switchable', async ({ page }) => {
+    await freshBoard(page);
+    const settings = await openSettings(page, /interface/i);
+    for (const name of ['Interface', 'Board Visibility', 'Intelligence', 'Credentials']) {
+      const tab = settings.getByRole('tab', { name });
+      await tab.click();
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+    }
   });
 });

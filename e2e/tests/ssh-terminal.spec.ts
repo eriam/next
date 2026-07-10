@@ -1,6 +1,6 @@
 import { test, expect, Page, Locator } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { freshBoard, addApp, enterRoom, enterBoard, createRoom, createBoard } from '../fixtures/sage3';
+import { freshBoard, addApp, enterRoom, enterBoard, createRoom, createBoard, login } from '../fixtures/sage3';
 
 /**
  * SSHTerminal app — real end-to-end. The server (homebase) dials a real sshd, starts
@@ -198,4 +198,49 @@ test('reconnects to the session after leaving and re-entering the board', async 
   // replaying the reattached session — proof the reconnect path works.
   await expect(page.locator('.xterm')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.xterm-rows')).toContainText('FIRST_4', { timeout: 30_000 });
+});
+
+test('a second viewer of the same terminal sees the output', async ({ page, browser }) => {
+  await freshBoard(page);
+  await placeAndConnect(page, `e2e-2v-${Date.now()}`);
+  const boardUrl = page.url();
+  await runCommand(page, 'echo VIEWER_$((7+8))');
+  await expect(page.locator('.xterm-rows')).toContainText('VIEWER_15', { timeout: 15_000 });
+
+  // A second browser session (same account) opens the same board; output relays to
+  // every viewer, so B's fresh terminal replays the running tmux session.
+  const ctxB = await browser.newContext({ ignoreHTTPSErrors: true });
+  const pageB = await ctxB.newPage();
+  try {
+    await login(pageB);
+    await pageB.goto(boardUrl);
+    await expect(pageB.locator('.xterm')).toBeVisible({ timeout: 30_000 });
+    await expect(pageB.locator('.xterm-rows')).toContainText('VIEWER_15', { timeout: 30_000 });
+  } finally {
+    await ctxB.close();
+  }
+});
+
+test('connect with a passphrase-protected key', async ({ page }) => {
+  const passKeyPath = process.env.SSH_TARGET_PASS_KEY_PATH;
+  const passphrase = process.env.SSH_TARGET_PASSPHRASE;
+  test.skip(!passKeyPath || !passphrase, 'SSH_TARGET_PASS_KEY_PATH / _PASSPHRASE must be set');
+  const passKey = readFileSync(passKeyPath as string, 'utf8');
+
+  await freshBoard(page);
+  await addApp(page, 'SSHTerminal');
+  await page.getByPlaceholder('Host').fill(host as string);
+  await page.getByPlaceholder('Port').fill(port);
+  if (!(await page.getByText('New SSH key').isVisible().catch(() => false))) {
+    await clickInApp(page.getByRole('button', { name: /use a new key instead/i }));
+  }
+  await page.getByPlaceholder('Name (e.g. my-server-key)').fill(`e2e-pass-${Date.now()}`);
+  await page.getByPlaceholder('Username').fill(user);
+  await page.getByPlaceholder(/Private key \(paste the full contents/).fill(passKey);
+  await page.getByPlaceholder('Passphrase (optional)').fill(passphrase as string);
+  await clickInApp(page.getByRole('button', { name: 'Connect' }));
+
+  await expect(page.locator('.xterm')).toBeVisible({ timeout: 30_000 });
+  await runCommand(page, 'echo pass-$((4*4))');
+  await expect(page.locator('.xterm-rows')).toContainText('pass-16', { timeout: 15_000 });
 });
