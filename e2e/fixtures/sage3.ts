@@ -32,12 +32,24 @@ export function displayName(): string {
   return process.env.SAGE3_USER || 'e2e-tester';
 }
 
+/** A second LDAP account, for the cross-user tests (control transfer, owner
+ * isolation). Only required when those tests run. */
+export function creds2() {
+  const user = process.env.SAGE3_USER2;
+  const pass = process.env.SAGE3_PASS2;
+  if (!user || !pass) throw new Error('SAGE3_USER2 and SAGE3_PASS2 must be set for the cross-user tests');
+  return { user, pass };
+}
+
 /** Log in against the target instance and land on /#/home, completing first-login
- * account creation if shown. Strategy chosen by SAGE3_AUTH (guest by default). */
-export async function login(page: Page) {
+ * account creation if shown. Strategy chosen by SAGE3_AUTH (guest by default).
+ * Pass `opts` to log in as a specific LDAP account (used for the second user). */
+export async function login(page: Page, opts?: { user: string; pass: string }) {
   await page.goto('/');
+  const profileName = opts?.user ?? displayName();
   if (authStrategy() === 'ldap') {
-    const { user, pass } = creds();
+    const user = opts?.user ?? creds().user;
+    const pass = opts?.pass ?? creds().pass;
     const username = page.locator('input[name="username"]');
     await expect(username, 'LDAP login form should be visible').toBeVisible();
     await username.fill(user);
@@ -64,7 +76,7 @@ export async function login(page: Page) {
     const wentHome = await page.waitForURL(/#\/home/, { timeout: 4_000 }).then(() => true).catch(() => false);
     if (!wentHome) {
       const firstName = page.getByPlaceholder('First name');
-      if ((await firstName.inputValue().catch(() => '')) === '') await firstName.fill(displayName());
+      if ((await firstName.inputValue().catch(() => '')) === '') await firstName.fill(profileName);
       await page.getByRole('button', { name: 'Create Account' }).click();
       await page.waitForURL(/#\/home/, { timeout: 20_000 });
     }
