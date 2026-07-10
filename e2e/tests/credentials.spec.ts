@@ -1,5 +1,5 @@
 import { test, expect, Locator } from '@playwright/test';
-import { freshBoard, openSettings, login } from '../fixtures/sage3';
+import { freshBoard, openSettings, login, creds2 } from '../fixtures/sage3';
 
 /**
  * Credentials management UI — one functionality per test. Each starts from a fresh
@@ -156,5 +156,29 @@ test.describe('Credentials', () => {
 
     const all = (await (await page.request.get('/api/credentials')).json()) as Array<{ id: string; name: string }>;
     for (const c of all) if (c.name === key || c.name === up) await page.request.delete(`/api/credentials/${c.id}`);
+  });
+
+  test("a user cannot see another user's credentials", async ({ page, browser }) => {
+    test.skip(!process.env.SAGE3_USER2, 'SAGE3_USER2 / SAGE3_PASS2 required for the cross-user test');
+    // User A stores a credential.
+    await login(page);
+    const name = `e2e-iso-${Date.now()}`;
+    const create = await page.request.post('/api/credentials', {
+      data: { name, type: 'secretText', value: { type: 'secretText', secret: 'iso-secret' } },
+    });
+    expect(create.ok()).toBeTruthy();
+    const aId = (await create.json()).id as string;
+
+    // User B (a different account) lists credentials — owner-scoped, so A's is absent.
+    const ctxB = await browser.newContext({ ignoreHTTPSErrors: true });
+    const pageB = await ctxB.newPage();
+    try {
+      await login(pageB, creds2());
+      const listB = (await (await pageB.request.get('/api/credentials')).json()) as Array<{ name: string }>;
+      expect(listB.some((c) => c.name === name)).toBeFalsy();
+    } finally {
+      await ctxB.close();
+      await page.request.delete(`/api/credentials/${aId}`); // clean up A's credential
+    }
   });
 });

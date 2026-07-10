@@ -1,6 +1,6 @@
 import { test, expect, Page, Locator } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { freshBoard, addApp, enterRoom, enterBoard, createRoom, createBoard, login } from '../fixtures/sage3';
+import { freshBoard, addApp, enterRoom, enterBoard, createRoom, createBoard, login, creds2 } from '../fixtures/sage3';
 
 /**
  * SSHTerminal app — real end-to-end. The server (homebase) dials a real sshd, starts
@@ -216,6 +216,38 @@ test('a second viewer of the same terminal sees the output', async ({ page, brow
     await pageB.goto(boardUrl);
     await expect(pageB.locator('.xterm')).toBeVisible({ timeout: 30_000 });
     await expect(pageB.locator('.xterm-rows')).toContainText('VIEWER_15', { timeout: 30_000 });
+  } finally {
+    await ctxB.close();
+  }
+});
+
+test('control transfers between two users', async ({ page, browser }) => {
+  test.skip(!process.env.SAGE3_USER2, 'SAGE3_USER2 / SAGE3_PASS2 required for the cross-user test');
+  await freshBoard(page); // user A; the room is open-by-link so user B can join
+  await placeAndConnect(page, `e2e-ct-${Date.now()}`);
+  const boardUrl = page.url();
+  await runCommand(page, 'echo AAA_$((1+1))'); // A takes control and drives
+  await expect(page.locator('.xterm-rows')).toContainText('AAA_2', { timeout: 15_000 });
+
+  const ctxB = await browser.newContext({ ignoreHTTPSErrors: true });
+  const pageB = await ctxB.newPage();
+  try {
+    await login(pageB, creds2()); // a DIFFERENT user
+    await pageB.goto(boardUrl);
+    await expect(pageB.locator('.xterm')).toBeVisible({ timeout: 30_000 });
+
+    // Control is per-user, so B is offered "Take control"; taking it strips A's control.
+    const takeB = pageB.getByRole('button', { name: /take control/i });
+    await expect(takeB).toBeVisible({ timeout: 15_000 });
+    await clickInApp(takeB);
+    await expect(takeB).toBeHidden();
+    await expect(page.getByRole('button', { name: /take control/i })).toBeVisible({ timeout: 15_000 });
+
+    // B can now drive the shell.
+    await pageB.locator('.xterm-helper-textarea').focus();
+    await pageB.keyboard.type('echo BBB_$((3+3))');
+    await pageB.keyboard.press('Enter');
+    await expect(pageB.locator('.xterm-rows')).toContainText('BBB_6', { timeout: 15_000 });
   } finally {
     await ctxB.close();
   }
