@@ -7,8 +7,8 @@
 #
 # The container authorizes the generated public key for user $SSH_TARGET_USER.
 # IMPORTANT: the app-under-test's BACKEND (homebase) must be able to reach this port, not just
-# the runner. On the shared runner, pick a port in the reserved 2200-2299 range and confirm the
-# target staging/prod host can dial <runner-ip>:<port>.
+# the runner. Pick any free port on the runner and confirm the
+# SAGE3 backend host can dial <test-host-ip>:<port>.
 #
 set -euo pipefail
 

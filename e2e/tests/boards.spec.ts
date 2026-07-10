@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { loginLdap, createRoom, enterRoom, createBoard, enterBoard } from '../fixtures/sage3';
+import { login, createRoom, enterRoom, createBoard, enterBoard } from '../fixtures/sage3';
 
 test.describe('Boards', () => {
   test('create a board', async ({ page }) => {
-    await loginLdap(page);
+    await login(page);
     const room = await createRoom(page);
     await enterRoom(page, room);
     const board = await createBoard(page);
@@ -11,7 +11,7 @@ test.describe('Boards', () => {
   });
 
   test('enter a board', async ({ page }) => {
-    await loginLdap(page);
+    await login(page);
     const room = await createRoom(page);
     await enterRoom(page, room);
     const board = await createBoard(page);

@@ -1,19 +1,16 @@
 import { test, expect } from '@playwright/test';
-import { loginLdap } from '../fixtures/sage3';
+import { login } from '../fixtures/sage3';
 
 /**
- * Deployment smoke test — the prod-deploy gate.
+ * Smoke test — exercises the whole stack end-to-end in a real browser: auth,
+ * first-login account creation, the home page, and creating a room (which round-trips
+ * through the WebSocket / SAGEBase backend). If this passes, the frontend + auth +
+ * backend are functionally alive.
  *
- * Exercises the whole stack end-to-end in a real browser: LDAP auth, first-login
- * account creation, the home page, and creating a room (which round-trips through the
- * WebSocket / SAGEBase backend). If this passes, the deployed frontend + auth + backend
- * are functionally alive; if it fails, prod should NOT be deployed.
- *
- * Deeper feature flows (credentials CRUD, SSH terminal) live in their own specs and are
- * added to the gate as they're tuned.
+ * Deeper feature flows (credentials CRUD, SSH terminal) live in their own specs.
  */
 test('smoke: login, account creation, and room creation round-trip', async ({ page }) => {
-  await loginLdap(page);
+  await login(page);
   await expect(page).toHaveURL(/#\/home/);
 
   const roomName = `e2e-smoke-${Date.now()}`;

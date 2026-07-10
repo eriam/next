@@ -8,7 +8,7 @@ import { deleteAllE2ERooms, deleteAllE2ECredentials } from './fixtures/sage3';
  */
 export default async function globalTeardown(_config: FullConfig): Promise<void> {
   if (!process.env.SAGE3_USER || !process.env.SAGE3_PASS) return;
-  const baseURL = process.env.BASE_URL || 'https://sage3-staging.mediavirtuel.com';
+  const baseURL = process.env.BASE_URL || 'http://localhost:4200';
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({ baseURL, ignoreHTTPSErrors: true });

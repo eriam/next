@@ -10,7 +10,7 @@ test.describe('App availability', () => {
   test('SSHTerminal is offered in the Applications menu', async ({ page }) => {
     await freshBoard(page);
     await page.locator('[aria-label="Open Applications Menu"]').click();
-    // TODO(runner): confirm the menu label if this doesn't match ("SSH Terminal" vs "SSHTerminal").
+    // The menu lists the app by its type name; match "SSHTerminal" / "SSH Terminal".
     await expect(page.getByText(/ssh\s?terminal/i).first()).toBeVisible({ timeout: 10_000 });
   });
 

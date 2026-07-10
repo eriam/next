@@ -1,35 +1,60 @@
 import { Page, expect } from '@playwright/test';
 
 /**
- * Reusable building blocks for the functional E2E specs, all grounded in the real
- * SAGE3 webapp DOM (validated live against staging on the e2e-runner):
+ * Reusable building blocks for the functional E2E specs, grounded in the real SAGE3
+ * webapp DOM:
  *   login -> [first-login account creation] -> home
  *   create room -> enter room (/#/home/room/<id>)
  *   create board -> enter board (double-click card, /#/board/<room>/<board>)
  *   board MainButton (the button showing the user's name) -> "Settings" -> tabs incl. "Credentials"
+ *
+ * Auth is instance-dependent, so login() is strategy-selectable via SAGE3_AUTH:
+ *   - "guest" (default): click the guest login button (ephemeral user).
+ *   - "ldap": fill the LDAP form; requires SAGE3_USER / SAGE3_PASS.
  */
 
+type AuthStrategy = 'guest' | 'ldap';
+export function authStrategy(): AuthStrategy {
+  return (process.env.SAGE3_AUTH as AuthStrategy) || 'guest';
+}
+
+/** LDAP credentials — only required when SAGE3_AUTH=ldap. */
 export function creds() {
   const user = process.env.SAGE3_USER;
   const pass = process.env.SAGE3_PASS;
-  if (!user || !pass) throw new Error('SAGE3_USER and SAGE3_PASS must be set');
+  if (!user || !pass) throw new Error('SAGE3_USER and SAGE3_PASS must be set for SAGE3_AUTH=ldap');
   return { user, pass };
 }
 
-/** Log in via the LDAP form; complete first-login account creation if shown; land on the app. */
-export async function loginLdap(page: Page) {
-  const { user, pass } = creds();
+/** The name the test account is created/known by — fills the first-login profile
+ * form and locates the board MainButton. Defaults to a stable label for guest runs. */
+export function displayName(): string {
+  return process.env.SAGE3_USER || 'e2e-tester';
+}
+
+/** Log in against the target instance and land on /#/home, completing first-login
+ * account creation if shown. Strategy chosen by SAGE3_AUTH (guest by default). */
+export async function login(page: Page) {
   await page.goto('/');
-  const username = page.locator('input[name="username"]');
-  await expect(username, 'LDAP login form should be visible').toBeVisible();
-  await username.fill(user);
-  await page.locator('input[name="password"]').fill(pass);
-  await Promise.all([
-    page.waitForURL((url) => !/error=/.test(url.href), { timeout: 20_000 }),
-    // Two elements share the name "Login with LDAP"; the form's submit button is unambiguous.
-    page.locator('form[action="/auth/ldap"] button[type="submit"]').click(),
-  ]);
-  await expect(page, 'LDAP login must not be rejected').not.toHaveURL(/error=ldap_failed/);
+  if (authStrategy() === 'ldap') {
+    const { user, pass } = creds();
+    const username = page.locator('input[name="username"]');
+    await expect(username, 'LDAP login form should be visible').toBeVisible();
+    await username.fill(user);
+    await page.locator('input[name="password"]').fill(pass);
+    await Promise.all([
+      page.waitForURL((url) => !/error=/.test(url.href), { timeout: 20_000 }),
+      // Two elements share the name "Login with LDAP"; the form's submit button is unambiguous.
+      page.locator('form[action="/auth/ldap"] button[type="submit"]').click(),
+    ]);
+    await expect(page, 'LDAP login must not be rejected').not.toHaveURL(/error=/);
+  } else {
+    // Guest: the login page offers a guest button that creates an ephemeral user.
+    await Promise.all([
+      page.waitForURL((url) => !/error=/.test(url.href), { timeout: 20_000 }),
+      page.getByRole('button', { name: /log ?in as guest|guest/i }).first().click(),
+    ]);
+  }
 
   // After login we're on either home (existing account) or the first-login profile page.
   // An existing account only *flashes* createuser then auto-redirects home, so give that a
@@ -39,7 +64,7 @@ export async function loginLdap(page: Page) {
     const wentHome = await page.waitForURL(/#\/home/, { timeout: 4_000 }).then(() => true).catch(() => false);
     if (!wentHome) {
       const firstName = page.getByPlaceholder('First name');
-      if ((await firstName.inputValue().catch(() => '')) === '') await firstName.fill(user);
+      if ((await firstName.inputValue().catch(() => '')) === '') await firstName.fill(displayName());
       await page.getByRole('button', { name: 'Create Account' }).click();
       await page.waitForURL(/#\/home/, { timeout: 20_000 });
     }
@@ -81,7 +106,7 @@ export async function enterBoard(page: Page, name: string) {
 
 /** The board's MainButton is a Chakra button whose text is the user's (short) name. */
 export function mainButton(page: Page) {
-  return page.getByRole('button', { name: new RegExp(creds().user, 'i') }).first();
+  return page.getByRole('button', { name: new RegExp(displayName(), 'i') }).first();
 }
 
 /** Open user settings on the given tab (default Credentials) from the board MainButton menu. */
@@ -100,7 +125,7 @@ export async function openSettings(page: Page, tab: RegExp = /credentials/i) {
 
 /** Compose the whole path to a fresh, entered board. Returns the room + board names. */
 export async function freshBoard(page: Page) {
-  await loginLdap(page);
+  await login(page);
   const room = await createRoom(page);
   await enterRoom(page, room);
   const board = await createBoard(page);
@@ -176,7 +201,7 @@ export async function deleteAllE2ECredentials(page: Page, prefix = 'e2e-'): Prom
 
 /** Delete every room whose name starts with the e2e prefix. Used by global teardown. */
 export async function deleteAllE2ERooms(page: Page, prefix = 'e2e-'): Promise<number> {
-  await loginLdap(page);
+  await login(page);
   let deleted = 0;
   // Re-query each pass, since deleting reflows the list.
   for (let i = 0; i < 100; i++) {

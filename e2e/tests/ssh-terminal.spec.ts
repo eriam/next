@@ -7,10 +7,10 @@ import { freshBoard, addApp, enterRoom, enterBoard, createRoom, createBoard } fr
  * tmux, and relays the PTY over a WebSocket; the app renders it with xterm.js.
  *
  * Requires a reachable sshd target — bring one up with `scripts/ssh-target.sh up`.
- * IMPORTANT: the target must be reachable from the app-under-test's *backend*
- * (homebase), not just from this runner, since homebase makes the SSH connection.
- * Set SSH_TARGET_HOST to the runner's LAN IP (not 127.0.0.1) so the staging/prod
- * homebase container can dial it.
+ * IMPORTANT: the target must be reachable from the SAGE3 *backend* (homebase), not
+ * just from the machine running the tests, since homebase makes the SSH connection.
+ * When homebase runs on a different host (or in a container), set SSH_TARGET_HOST to
+ * an address it can dial (e.g. the test host's LAN IP, not 127.0.0.1).
  *
  * Form + terminal selectors are verbatim from SSHTerminal.tsx.
  */
