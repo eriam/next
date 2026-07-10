@@ -114,6 +114,8 @@ pipeline {
                                     set -e
                                     export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
                                     export BASE_URL=https://sage3-staging.mediavirtuel.com
+                                    # The specs default to guest login; our instances use LDAP.
+                                    export SAGE3_AUTH=ldap
                                     # Slow each action enough to clear open-animation races. The suite is
                                     # validated at >=120ms; SLOWMO_MS=0 is known to race the shared fixtures.
                                     export SLOWMO_MS=150
